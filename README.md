@@ -3,6 +3,10 @@ CGROW is a set of tools that include a library, a testing framework and a graphi
 
 DISTRIBUTION STATEMENT A. Approved for public release; distribution is unlimited.
 
+<div align="center">
+  <img src="https://raw.githubusercontent.com/USNavalResearchLaboratory/cgrow/main/doc/images/main_interface.PNG" alt="CGROW Main GUI">
+</div>
+
 # License intent
 CGROW is the work of the U.S. Government and the relevant source code is in the public domain. Please read the [license](license.txt) to ensure you can satisfy the authorization to use and distribute requirements.
 
