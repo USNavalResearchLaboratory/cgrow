@@ -1,4 +1,5 @@
-# cgrow
+# CGROW
+CGROW is a set of tools that include a library, a testing framework and a graphical user interface application for determining parameters of fatigue crack growth models from data. The library utilizes non-linear derivative free optimizers to achieve automatic determination.
 
 # License intent
 CGROW is the work of the U.S. Government and the relevant source code is in the public domain. Please read the [license](license.txt) to ensure you can satisfy the authorization to use and distribute requirements.
