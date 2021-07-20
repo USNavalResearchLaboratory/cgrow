@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/icons/file_new.png</file>
+        <file>assets/icons/file_open.png</file>
+        <file>assets/icons/file_save.png</file>
+        <file>assets/icons/process.png</file>
+        <file>assets/icons/marker_resize.png</file>
+        <file>assets/icons/marker_line_width.png</file>
+        <file>assets/icons/font_size.png</file>
+        <file>assets/icons/axes_line_width.png</file>
+        <file>assets/icons/grid_line_width.png</file>
+        <file>assets/icons/process_stop.png</file>
+        <file>assets/icons/to_excel.png</file>
+    </qresource>
+</RCC>
