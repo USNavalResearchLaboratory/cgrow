@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
 
     QApplication::setOrganizationName(("U.S. Naval Research Lab"));
-    QApplication::setApplicationName( ("Hartman-Schijve fit"));
+    QApplication::setApplicationName( ("CGROW - Hartman-Schijve"));
 
     register_qt_meta_types( );
 
