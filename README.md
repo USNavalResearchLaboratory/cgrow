@@ -1,5 +1,5 @@
 # CGROW
-CGROW is a set of tools that include a library, a testing framework and a graphical user interface application for determining parameters of fatigue crack growth models from data. The library utilizes non-linear derivative free optimizers to achieve automatic determination.
+CGROW is a set of tools that include a library, a testing framework and a graphical user interface application for determining parameters of fatigue crack growth models from data. The library utilizes non-linear derivative free optimizers to achieve automatic parameter determination.
 
 DISTRIBUTION STATEMENT A. Approved for public release; distribution is unlimited.
 
