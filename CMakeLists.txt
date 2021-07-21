@@ -1,6 +1,6 @@
 cmake_minimum_required( VERSION 3.15 )
 
-project( cgrowfw VERSION 0.8.1 )
+project( cgrowfw VERSION 0.8.2 )
 
 unset( QT_QMAKE_EXECUTABLE )
 
