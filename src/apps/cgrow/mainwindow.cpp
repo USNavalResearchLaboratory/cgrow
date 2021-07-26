@@ -77,7 +77,7 @@ mainWindow::mainWindow(QWidget *parent) : QMainWindow(parent)
     plot = new QCustomPlot;
 
     plot->xAxis->setLabel( "ΔK (MPa × m⁰·⁵)" );
-    plot->yAxis->setLabel( "da / dN (m/s)" );
+    plot->yAxis->setLabel( "da / dN (m/cycle)" );
     plot->yAxis2->setVisible(true);
     plot->xAxis2->setVisible(true);
     plot->xAxis2->setTicks(false);
