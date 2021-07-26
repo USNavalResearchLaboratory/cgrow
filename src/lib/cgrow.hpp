@@ -34,9 +34,9 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from third
-// parties. These are available on an "as is" basis and subject to their individual license agreements.
-// Additional information can be found in the provided "licenses" folder.
+// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from
+// third parties. These are available on an "as is" basis and subject to their individual license
+// agreements. Additional information can be found in the provided "licenses" folder.
 
 #pragma once
 
@@ -52,6 +52,8 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
+
+inline int totalevals = 0;
 
 namespace crack_growth
 {
@@ -440,6 +442,8 @@ T sample_parameter( const T&           min,
   return min + step * m;
 };
 
+
+
 template< class T, class Container_t >
 parameters< T > fit(
   parameters< T >     search_space_min,
@@ -450,8 +454,9 @@ parameters< T > fit(
   std::size_t         iterations    = 0,
   bool                use_geometric = false,
   callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
-  progress_callback_t progress_callback = []( std::size_t, std::size_t ) {},
-  const bool&         stop_requested    = false )
+  progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
+  const bool&         stop_requested                           = false,
+  std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
 {
   using params_t = parameters< T >;
 
@@ -490,6 +495,8 @@ parameters< T > fit(
   st num_threads = std::max( ( unsigned int )( 4 ), std::thread::hardware_concurrency( ) );
   num_threads    = std::min( num_threads, subdivisions );
 
+  std::cout << "Num threads: " << num_threads << std::endl;
+
   std::vector< double >   max_utilization_mins( num_threads, 0.0 );
   std::vector< T >        objective_mins( num_threads );
   std::vector< params_t > params_mins( num_threads );
@@ -510,7 +517,7 @@ parameters< T > fit(
 
     for ( st tid = 0; tid != num_threads; tid++ )
     {
-      threads.push_back( std::thread( [ callback,
+      threads.push_back( std::thread( [ per_thread_callback,
                                         D_index_span,
                                         subd,
                                         tid,
@@ -568,8 +575,10 @@ parameters< T > fit(
 
                 obj_params.A = sample_parameter( low, hi, subd, Aj );
 
-                auto d = objective_function( obj_params, use_geometric, test_set );
+                per_thread_callback( obj_params );
 
+                auto d = objective_function( obj_params, use_geometric, test_set );
+                totalevals++;
                 if ( d.utilization > max_utilization_mins[ tid ]
                      || // prefer utilization over minimization
                      ( objective_mins[ tid ] > d.distance
@@ -640,8 +649,9 @@ template< class T, class Container_t >
 parameters< T > fit(
   const Container_t&  test_set,
   callback_t< T >     callback = []( parameters< T >, parameters< T >, parameters< T > ) {},
-  progress_callback_t progress_callback = []( std::size_t, std::size_t ) {},
-  const bool&         stop_requested    = false )
+  progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
+  const bool&         stop_requested                           = false,
+  std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
 
 {
   T Amin      = std::numeric_limits< T >::lowest( );
@@ -678,13 +688,14 @@ parameters< T > fit(
   return fit( params_low,
               params_high,
               test_set,
-              10,
-              1.01,
+              9,
+              1.2,
               0,
               use_geometric,
               callback,
               progress_callback,
-              stop_requested );
+              stop_requested,
+              per_thread_callback );
 }
 
 } // namespace Hartman_Schijve
