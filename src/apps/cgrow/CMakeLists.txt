@@ -52,6 +52,7 @@ target_link_libraries( cgrow
   Qt5::Widgets
   Qt5::PrintSupport
   libcgrow
+  nlopt
   Threads::Threads
   )
 

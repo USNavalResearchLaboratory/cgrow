@@ -3,14 +3,15 @@
 #include <nlopt.hpp>
 #include <spdlog/spdlog.h>
 
+#include <random>
 #include <vector>
 
-constexpr double tA = 112.32;
-constexpr double tD = 4.32e-10;
-constexpr double tp = 2.23;
+constexpr double tA     = 112.32;
+constexpr double tD     = 4.32e-10;
+constexpr double tp     = 2.23;
 constexpr double tDKThr = 3.08;
 
-constexpr int figWidth = 640;
+constexpr int figWidth  = 640;
 constexpr int figHeight = 280;
 
 constexpr bool use_geometric = false;
@@ -32,6 +33,26 @@ std::vector< T > generate_sequence( T from, T to, std::size_t count )
   return seq;
 }
 
+template< class T >
+std::vector< T > pertrube( const std::vector< T >& original )
+{
+
+  std::random_device                       rd;
+  std::default_random_engine               eng( 6323 );
+  std::uniform_real_distribution< double > distr( -0.05, 0.05 );
+
+  std::vector< T > p;
+
+  for ( const auto& v : original )
+  {
+    auto o = distr( eng );
+
+    // std::cout << o << std::endl;
+    p.push_back( std::pow( 10, std::log10( v ) + o ) );
+  }
+
+  return p;
+}
 std::string toString( const nlopt::algorithm& a )
 {
   switch ( a )
@@ -209,7 +230,7 @@ void test_direct( TestSet_t&             test_set,
       opt.set_lower_bounds( { 1.0, 1.5, 0.0001, 53.0 } );
       opt.set_upper_bounds( { 5.0, 2.5, 3.15, 450.0 } );
       opt.set_min_objective( obj, static_cast< void* >( &data_tuple ) );
-      opt.set_maxtime( 120 ); // SECONDS
+      opt.set_maxtime( 60 ); // SECONDS
 
       std::vector< double > x_optim = { 1.2, 1.6, 0.01, 100.0 };
 
@@ -236,7 +257,7 @@ void test_direct( TestSet_t&             test_set,
       auto DeltaK_max = hs::calc_K_max( p, R );
       auto DKs        = generate_sequence( p.DeltaK_thr * ( 1.0 + 0.01 ), // From
                                     DeltaK_max * ( 1.0 - 0.01 ),   // To
-                                    500                             // Number of points
+                                    500                            // Number of points
       );
 
       auto  dadNs = crack_growth::Hartman_Schijve::evaluate( p, R, DKs );
@@ -247,8 +268,7 @@ void test_direct( TestSet_t&             test_set,
       {
         // g.color = plt::color::rgb( 255,165,0);
         g0.lineStyle = plt::LineStyle::Dash;
-      }
-      ;
+      };
     }
   }
   catch ( const std::exception& e )
@@ -275,12 +295,14 @@ int main( )
 
     spdlog::info( "{}", hs::evaluate( params, R, real_t( 6.0 ) ) );
 
-    auto DKs = generate_sequence( params.DeltaK_thr * ( 1.0 + 0.01 ), // From
-                                  DeltaK_max * ( 1.0 - 0.01 ),        // To
-                                  30                                   // Number of points
+    auto DKso = generate_sequence( params.DeltaK_thr * ( 1.0 + 0.01 ), // From
+                                   DeltaK_max * ( 1.0 - 0.01 ),        // To
+                                   30                                  // Number of points
     );
 
-    auto dadNs = hs::evaluate( params, R, DKs );
+    auto DKs = pertrube( DKso );
+
+    auto dadNs = hs::evaluate( params, R, DKso );
 
     auto win0 = plt::plot( DKs,
                            dadNs,
@@ -292,7 +314,7 @@ int main( )
                            legend_alignment_
                            = plt::HorizontalAlignment::Right | plt::VerticalAlignment::Bottom );
 
-    win0.figure(0).graph(0).name="Data";
+    win0.figure( 0 ).graph( 0 ).name = "Data";
 
     std::vector< crack_growth::test_data_t< real_t > > test_set;
     crack_growth::test_data_t< real_t >                test_data;
@@ -460,19 +482,27 @@ int main( )
     std::size_t i = 0;
     totalevals    = 0;
 
-    auto p        = hs::fit< real_t >(
+    double fmin1 = 100000000;
+    auto   p     = hs::fit< real_t >(
       test_set,
       use_geometric,
-      [ &i, &g1, &g3, &g4, &g5 ](
+      [ &i, &g1, &g3, &g4, &g5, &fmin1, &test_set ](
         hs::parameters< real_t > p, hs::parameters< real_t > l, hs::parameters< real_t > h ) {
         //   spdlog::info( "D: {}, p: {}, A: {}, DeltaK_thr: {}", p.D, p.p, p.DeltaK_thr, p.A );
         //   spdlog::info( " D: {}, p: {}, A: {}, DeltaK_thr: {}", l.D, l.p, l.DeltaK_thr, l.A );
         //   spdlog::info( " D: {}, p: {}, A: {}, DeltaK_thr: {}", h.D, h.p, h.DeltaK_thr, h.A );
-        spdlog::info( "{},{}", i, p.A );
-        g1.append_data( totalevals, p.A );
-        g3.append_data( totalevals, p.DeltaK_thr );
-        g4.append_data( totalevals, p.p );
-        g5.append_data( totalevals, p.D );
+
+        auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set );
+        if ( fmin1 > double( d.distance ) )
+        {
+          fmin1 = double( d.distance );
+
+          spdlog::info( "{},{}", i, p.A );
+          g1.append_data( totalevals, p.A );
+          g3.append_data( totalevals, p.DeltaK_thr );
+          g4.append_data( totalevals, p.p );
+          g5.append_data( totalevals, p.D );
+        }
       },
       [ &i ]( std::size_t t, std::size_t ) { i = t; },
       false,
@@ -484,7 +514,7 @@ int main( )
     {
       auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set );
 
-      //auto model_distance = hs::distance( p, R, DKs, dadNs );
+      // auto model_distance = hs::distance( p, R, DKs, dadNs );
 
       spdlog::info( "{:<75}, obj:{:.4f}, D: {:.2g}, p: {:.2f}, DKthr: {:.2f}, A:{:.2f}",
                     "CUHYSO:",
@@ -497,7 +527,7 @@ int main( )
       auto  DeltaK_max = hs::calc_K_max( p, R );
       auto  DKs        = generate_sequence( p.DeltaK_thr * ( 1.0 + 0.01 ), // From
                                     DeltaK_max * ( 1.0 - 0.01 ),   // To
-                                    500                             // Number of points
+                                    500                            // Number of points
       );
       auto  dadNs      = hs::evaluate( p, R, DKs );
       auto& g          = win0.add_graph( DKs, dadNs );
@@ -506,8 +536,8 @@ int main( )
 
     test_direct( test_set, f1, f3, f4, f5, win0 );
 
-   // auto w = 2000;
-   // auto h = int( 265.0 / 490.0 * 2000 );
+    // auto w = 2000;
+    // auto h = int( 265.0 / 490.0 * 2000 );
     plot_window1.save( "a.pdf" );
     plot_window3.save( "DKthr.pdf" );
     plot_window4.save( "p.pdf" );

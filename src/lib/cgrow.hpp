@@ -81,16 +81,6 @@ namespace Hartman_Schijve
 template< class T >
 struct parameters
 {
-  parameters( ) = default;
-
-  parameters( T D, T p, T DeltaK_thr, T A )
-  {
-    this->D          = D;
-    this->p          = p;
-    this->DeltaK_thr = DeltaK_thr;
-    this->A          = A;
-  }
-
   T D          = 0.0;
   T p          = 0.0;
   T DeltaK_thr = 0.0;
@@ -363,7 +353,7 @@ auto distance_nondimensional( const T& DeltaKi,
 
   auto d = absolute_square_distance( DeltaK_d, DeltaKi_d, dadNi_d, R, DD_d, p, DeltaKthr_d, A_d );
 
-  return std::make_tuple( d, i );
+  return std::make_tuple( d * 1e3, i );
 }
 
 template< class T, class Container_t >
@@ -441,8 +431,6 @@ T sample_parameter( const T&           min,
 
   return min + step * m;
 };
-
-
 
 template< class T, class Container_t >
 parameters< T > fit(
@@ -541,7 +529,12 @@ parameters< T > fit(
           auto low = search_space_min.D;
           auto hi  = search_space_max.D;
 
-          obj_params.D = sample_parameter( low, hi, subd, dj );
+          auto lowl = std::log10( low );
+          auto hil = std::log10( hi );
+
+
+          auto dl = sample_parameter( lowl, hil, subd, dj );
+          obj_params.D = std::pow(10.0, dl );
 
           // auto steps = search_space_min.p == search_space_max.p ? 1 : subd;
 
@@ -626,8 +619,13 @@ parameters< T > fit(
 
     const T a = amortization;
 
-    std::tie( search_space_min.D, search_space_max.D )
-      = contract_range( search_space_min.D, search_space_max.D, params_at_min.D, a );
+    T Dlmin = 0;
+    T Dlmax = 0;
+    std::tie( Dlmin, Dlmax )
+      = contract_range( std::log10( search_space_min.D), std::log10(search_space_max.D), std::log10(params_at_min.D), a );
+
+    search_space_min.D = std::pow( 10.0, Dlmin );
+    search_space_max.D = std::pow( 10.0, Dlmax );
 
     std::tie( search_space_min.p, search_space_max.p )
       = contract_range( search_space_min.p, search_space_max.p, params_at_min.p, a );
@@ -639,6 +637,8 @@ parameters< T > fit(
       = contract_range( search_space_min.A, search_space_max.A, params_at_min.A, a );
 
     progress_callback( t, iterations );
+
+    std::cout << search_space_min.D << " " << search_space_max.D << " " << params_at_min.D << " " << objective_min << std::endl;
   }
 
   // TODO: Is this correct? For some reason it was not here
@@ -648,6 +648,7 @@ parameters< T > fit(
 template< class T, class Container_t >
 parameters< T > fit(
   const Container_t&  test_set,
+  bool use_geometric = false,
   callback_t< T >     callback = []( parameters< T >, parameters< T >, parameters< T > ) {},
   progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
   const bool&         stop_requested                           = false,
@@ -666,8 +667,8 @@ parameters< T > fit(
     }
   }
 
-  auto params_low  = parameters< T > { 1.0e-10, 1.5, 0.0001, 0.9 * Amin };
-  auto params_high = parameters< T > { 5.0e-10, 2.5, 1.05 * DeltaKmin, 450.0 };
+  auto params_low  = parameters< T > { 1.0e-10, 1.7, 0.0001, 0.9 * Amin };
+  auto params_high = parameters< T > { 5.0e-10, 2.3, 1.05 * DeltaKmin, 450.0 };
 
   // return fit( params_low, params_high, R, DeltaKs, dadNs, 12, 1.01, 0, callback ); // GOOD
 
@@ -683,13 +684,12 @@ parameters< T > fit(
   // callback, progress_callback, stop_requested ); super fast return fit( params_low, params_high,
   // R, DeltaKs, dadNs, 12, 2, 0, callback, progress_callback, stop_requested );
 
-  bool use_geometric = false;
 
   return fit( params_low,
               params_high,
               test_set,
-              9,
-              1.2,
+              12,
+              1.005,
               0,
               use_geometric,
               callback,
