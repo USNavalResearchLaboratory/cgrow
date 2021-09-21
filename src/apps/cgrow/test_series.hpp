@@ -47,6 +47,8 @@
 
 #include <QJsonObject>
 
+#include <set>
+
 using test_data_t = crack_growth::test_data_t< double >;
 
 Q_DECLARE_METATYPE( test_data_t )

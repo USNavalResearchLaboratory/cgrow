@@ -34,9 +34,9 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from third
-// parties. These are available on an "as is" basis and subject to their individual license agreements.
-// Additional information can be found in the provided "licenses" folder.
+// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from
+// third parties. These are available on an "as is" basis and subject to their individual license
+// agreements. Additional information can be found in the provided "licenses" folder.
 
 #ifndef MAINWINDOW_HPP
 #define MAINWINDOW_HPP
@@ -52,6 +52,8 @@
 #include "qcustomplot.h"
 
 #include <cgrow.hpp>
+
+#include <set>
 
 class decorated_double_spinbox;
 class tests_list_widget;
@@ -75,24 +77,6 @@ public:
 
   ~mainWindow( );
 
-  template< class T >
-  void setFittedData( const std::vector< T >& DeltaKs, const std::vector< T >& dadNs )
-  {
-
-    QVector< double > xs;
-    for ( auto x : DeltaKs )
-    {
-      xs.push_back( double( x ) );
-    }
-
-    QVector< double > ys;
-    for ( auto y : dadNs )
-    {
-      ys.push_back( double( y ) );
-    }
-
-    fitted_line_graph->setData( xs, ys, true );
-  }
 
   template< class T >
   void setLow( const std::vector< T >& DeltaKs, const std::vector< T >& dadNs )
@@ -253,7 +237,9 @@ private:
   tests_list_widget*   tests_list;
   QVector< QCPGraph* > tests_graph_map;
 
-  QCPGraph* fitted_line_graph  = nullptr;
+  QVector< QCPGraph* > computed_graphs;
+  std::set< real_t >   Rs;
+
   QCPGraph* lower_bounds_graph = nullptr;
   QCPGraph* upper_bounds_graph = nullptr;
 
