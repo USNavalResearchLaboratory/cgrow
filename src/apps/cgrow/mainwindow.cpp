@@ -241,7 +241,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
       D_min = new QLineEdit( "1e-10" );
       D_min->setValidator( validator );
 
-      D_max = new QLineEdit( "5e-10" );
+      D_max = new QLineEdit( "5e-7" );
       D_max->setValidator( validator );
 
       fgrid->addWidget( new QLabel( "D:" ), ++q, 0, 1, 1 );
@@ -252,10 +252,10 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     {
       auto validator = new QDoubleValidator( 0, 10, 4 );
 
-      p_min = new QLineEdit( "1.2" );
+      p_min = new QLineEdit( "1.5" );
       p_min->setValidator( validator );
 
-      p_max = new QLineEdit( "2.8" );
+      p_max = new QLineEdit( "2.5" );
       p_max->setValidator( validator );
 
       fgrid->addWidget( new QLabel( "p:" ), ++q, 0, 1, 1 );

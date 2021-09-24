@@ -6,10 +6,10 @@
 #include <random>
 #include <vector>
 
-constexpr double tA     = 112.32;
-constexpr double tD     = 4.32e-10;
-constexpr double tp     = 2.23;
-constexpr double tDKThr = 3.08;
+constexpr double tA     = 116.81;
+constexpr double tD     = 3.9e-10;
+constexpr double tp     = 2.29;
+constexpr double tDKThr = 3.04;
 
 constexpr int figWidth  = 640;
 constexpr int figHeight = 280;
@@ -47,7 +47,7 @@ std::vector< T > pertrube( const std::vector< T >& original )
   {
     auto o = distr( eng );
 
-    //std::cout << o << std::endl;
+    // std::cout << o << std::endl;
     p.push_back( std::pow( 10, std::log10( v ) + o ) );
   }
 
@@ -160,7 +160,10 @@ void test_direct( TestSet_t&             test_set,
 
     evals++;
 
-    auto d = crack_growth::Hartman_Schijve::objective_function( params, use_geometric, test_set );
+    auto sc = crack_growth::computeAxesScale< real_t >( test_set );
+
+    auto d
+      = crack_growth::Hartman_Schijve::objective_function( params, use_geometric, test_set, sc );
     if ( fmin1 > double( d.distance ) )
     {
       fmin1 = double( d.distance );
@@ -230,7 +233,7 @@ void test_direct( TestSet_t&             test_set,
       opt.set_lower_bounds( { 1.0, 1.5, 0.0001, 53.0 } );
       opt.set_upper_bounds( { 5.0, 2.5, 3.15, 450.0 } );
       opt.set_min_objective( obj, static_cast< void* >( &data_tuple ) );
-      opt.set_maxtime( 60 ); // SECONDS
+      opt.set_maxtime( 410 ); // SECONDS
 
       std::vector< double > x_optim = { 1.2, 1.6, 0.01, 100.0 };
 
@@ -296,8 +299,8 @@ int main( )
     spdlog::info( "{}", hs::evaluate( params, R, real_t( 6.0 ) ) );
 
     auto DKso = generate_sequence( params.DeltaK_thr * ( 1.0 + 0.01 ), // From
-                                  DeltaK_max * ( 1.0 - 0.01 ),        // To
-                                  30                                  // Number of points
+                                   DeltaK_max * ( 1.0 - 0.01 ),        // To
+                                   30                                  // Number of points
     );
 
     auto DKs = pertrube( DKso );
@@ -311,6 +314,8 @@ int main( )
                            x_axis_scaling_type_ = plt::axis_scaling_type::logarithmic,
                            y_axis_scaling_type_ = plt::axis_scaling_type::logarithmic,
                            show_legend_         = true,
+                           xlabel_              = "ΔK",
+                           ylabel_              = "da/dN",
                            legend_alignment_
                            = plt::HorizontalAlignment::Right | plt::VerticalAlignment::Bottom );
 
@@ -333,17 +338,8 @@ int main( )
       spdlog::info( "{},{}", DKs[ i ], dadNs[ i ] );
     }
 
-    auto model_distance = hs::distance( params, R, DKs, dadNs );
-
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
-
-    params.p       = 2;
-    model_distance = hs::distance( params, R, DKs, dadNs );
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
-
+    params.p          = 2;
     params.DeltaK_thr = 4;
-    model_distance    = hs::distance( params, R, DKs, dadNs );
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
 
     // test_nelder_mead( test_set );
 
@@ -357,7 +353,7 @@ int main( )
                                    ylabel_      = "A",
                                    show_legend_ = true,
                                    ylim_        = { 0, 500 },
-                                   xlim_        = { 1, 2e8 },
+                                   xlim_        = { 1, 1e10 },
                                    auto_fit_    = false,
                                    window_size_ = { figWidth, figHeight } );
 
@@ -386,7 +382,7 @@ int main( )
                                    ylabel_           = "ΔΚthr",
                                    show_legend_      = true,
                                    ylim_             = { 0, 4 },
-                                   xlim_             = { 1, 2e8 },
+                                   xlim_             = { 1, 1e9 },
                                    auto_fit_         = false,
                                    legend_alignment_ = plt::HorizontalAlignment::Right
                                                        | plt::VerticalAlignment::Bottom,
@@ -417,7 +413,7 @@ int main( )
                                    ylabel_      = "p",
                                    show_legend_ = true,
                                    ylim_        = { 1, 2.6 },
-                                   xlim_        = { 1, 2e8 },
+                                   xlim_        = { 1, 1e10 },
                                    auto_fit_    = false,
                                    window_size_ = { figWidth, figHeight } );
 
@@ -446,7 +442,7 @@ int main( )
                                    ylabel_      = "D",
                                    show_legend_ = true,
                                    ylim_        = { 1E-11, 6E-10 },
-                                   xlim_        = { 1, 2e8 },
+                                   xlim_        = { 1, 1e10 },
                                    auto_fit_    = false,
                                    window_size_ = { figWidth, figHeight } );
 
@@ -482,10 +478,12 @@ int main( )
     std::size_t i = 0;
     totalevals    = 0;
 
+      auto sc = crack_growth::computeAxesScale< real_t >( test_set );
+
     auto p = hs::fit< real_t >(
       test_set,
       use_geometric,
-      [ &i, &g1, &g3, &g4, &g5 ](
+      [ &i, &g1, &g3, &g4, &g5, sc ](
         hs::parameters< real_t > p, hs::parameters< real_t > l, hs::parameters< real_t > h ) {
         //   spdlog::info( "D: {}, p: {}, A: {}, DeltaK_thr: {}", p.D, p.p, p.DeltaK_thr, p.A );
         //   spdlog::info( " D: {}, p: {}, A: {}, DeltaK_thr: {}", l.D, l.p, l.DeltaK_thr, l.A );
@@ -504,7 +502,7 @@ int main( )
       } );
 
     {
-      auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set );
+      auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set, sc );
 
       // auto model_distance = hs::distance( p, R, DKs, dadNs );
 

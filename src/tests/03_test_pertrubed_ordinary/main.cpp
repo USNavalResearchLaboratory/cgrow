@@ -136,9 +136,9 @@ void test_direct( TestSet_t&             test_set,
 
   using namespace cxxplot::named_parameters;
 
-  using data_t = std::tuple< TestSet_t*, plt::graph*, plt::graph*, plt::graph*, plt::graph* >;
+  using data_t = std::tuple< TestSet_t*, plt::graph*, plt::graph*, plt::graph*, plt::graph*, real_t*  >;
 
-  auto obj = []( const std::vector< double >& vals, std::vector< double >&, void* data ) {
+  auto obj = [ ]( const std::vector< double >& vals, std::vector< double >&, void* data ) {
     data_t& data_cast = *static_cast< data_t* >( data );
 
     TestSet_t&  test_set = *std::get< 0 >( data_cast );
@@ -146,6 +146,7 @@ void test_direct( TestSet_t&             test_set,
     plt::graph& graph2   = *std::get< 2 >( data_cast );
     plt::graph& graph3   = *std::get< 3 >( data_cast );
     plt::graph& graph4   = *std::get< 4 >( data_cast );
+    real_t &sc = *std::get< 5 >( data_cast );
 
     //  std::cout << test_set[0].points.size() << std::endl;
     using real_t = long double;
@@ -160,7 +161,8 @@ void test_direct( TestSet_t&             test_set,
 
     evals++;
 
-    auto d = crack_growth::Hartman_Schijve::objective_function( params, use_geometric, test_set );
+    auto d
+      = crack_growth::Hartman_Schijve::objective_function( params, use_geometric, test_set, sc );
     if ( fmin1 > double( d.distance ) )
     {
       fmin1 = double( d.distance );
@@ -225,7 +227,9 @@ void test_direct( TestSet_t&             test_set,
       auto& f = plot_window.figure( 0 );
       auto& g = f.graph( 0 );
 
-      data_t data_tuple( &test_set, &g1, &g2, &g3, &g4 );
+      auto sc = crack_growth::computeAxesScale< real_t >( test_set );
+
+      data_t data_tuple( &test_set, &g1, &g2, &g3, &g4, &sc );
 
       opt.set_lower_bounds( { 1.0, 1.5, 0.0001, 53.0 } );
       opt.set_upper_bounds( { 5.0, 2.5, 3.15, 450.0 } );
@@ -332,18 +336,6 @@ int main( )
     {
       spdlog::info( "{},{}", DKs[ i ], dadNs[ i ] );
     }
-
-    auto model_distance = hs::distance( params, R, DKs, dadNs );
-
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
-
-    params.p       = 2;
-    model_distance = hs::distance( params, R, DKs, dadNs );
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
-
-    params.DeltaK_thr = 4;
-    model_distance    = hs::distance( params, R, DKs, dadNs );
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
 
     // test_nelder_mead( test_set );
 
@@ -483,16 +475,20 @@ int main( )
     totalevals    = 0;
 
     double fmin1 = 100000000;
-    auto   p     = hs::fit< real_t >(
+
+    auto sc = crack_growth::computeAxesScale< real_t >( test_set );
+
+    auto p = hs::fit< real_t >(
       test_set,
       use_geometric,
-      [ &i, &g1, &g3, &g4, &g5, &fmin1, &test_set ](
+      [ &i, &g1, &g3, &g4, &g5, &fmin1, &test_set, sc ](
         hs::parameters< real_t > p, hs::parameters< real_t > l, hs::parameters< real_t > h ) {
         //   spdlog::info( "D: {}, p: {}, A: {}, DeltaK_thr: {}", p.D, p.p, p.DeltaK_thr, p.A );
         //   spdlog::info( " D: {}, p: {}, A: {}, DeltaK_thr: {}", l.D, l.p, l.DeltaK_thr, l.A );
         //   spdlog::info( " D: {}, p: {}, A: {}, DeltaK_thr: {}", h.D, h.p, h.DeltaK_thr, h.A );
 
-        auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set );
+        auto d
+          = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set, sc );
         if ( fmin1 > double( d.distance ) )
         {
           fmin1 = double( d.distance );
@@ -512,7 +508,7 @@ int main( )
       } );
 
     {
-      auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set );
+      auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set, sc );
 
       // auto model_distance = hs::distance( p, R, DKs, dadNs );
 

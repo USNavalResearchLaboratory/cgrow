@@ -5,15 +5,15 @@
 
 #include <vector>
 
-constexpr double tA = 112.32;
-constexpr double tD = 4.32e-10;
-constexpr double tp = 2.23;
+constexpr double tA     = 112.32;
+constexpr double tD     = 4.32e-10;
+constexpr double tp     = 2.23;
 constexpr double tDKThr = 3.08;
 
-constexpr int figWidth = 640;
+constexpr int figWidth  = 640;
 constexpr int figHeight = 280;
 
-constexpr bool use_geometric = false;
+constexpr bool use_geometric = true;
 
 template< class T >
 std::vector< T > generate_sequence( T from, T to, std::size_t count )
@@ -115,7 +115,8 @@ void test_direct( TestSet_t&             test_set,
 
   using namespace cxxplot::named_parameters;
 
-  using data_t = std::tuple< TestSet_t*, plt::graph*, plt::graph*, plt::graph*, plt::graph* >;
+  using data_t
+    = std::tuple< TestSet_t*, plt::graph*, plt::graph*, plt::graph*, plt::graph*, real_t* >;
 
   auto obj = []( const std::vector< double >& vals, std::vector< double >&, void* data ) {
     data_t& data_cast = *static_cast< data_t* >( data );
@@ -125,7 +126,7 @@ void test_direct( TestSet_t&             test_set,
     plt::graph& graph2   = *std::get< 2 >( data_cast );
     plt::graph& graph3   = *std::get< 3 >( data_cast );
     plt::graph& graph4   = *std::get< 4 >( data_cast );
-
+    real_t&     sc       = *std::get< 5 >( data_cast );
     //  std::cout << test_set[0].points.size() << std::endl;
     using real_t = long double;
 
@@ -139,7 +140,8 @@ void test_direct( TestSet_t&             test_set,
 
     evals++;
 
-    auto d = crack_growth::Hartman_Schijve::objective_function( params, use_geometric, test_set );
+    auto d
+      = crack_growth::Hartman_Schijve::objective_function( params, use_geometric, test_set, sc );
     if ( fmin1 > double( d.distance ) )
     {
       fmin1 = double( d.distance );
@@ -202,9 +204,11 @@ void test_direct( TestSet_t&             test_set,
                                     ylabel_       = "A" );
 
       auto& f = plot_window.figure( 0 );
-      auto& g = f.graph( 0 );
+      //auto& g = f.graph( 0 );
 
-      data_t data_tuple( &test_set, &g1, &g2, &g3, &g4 );
+      auto sc = crack_growth::computeAxesScale< real_t >( test_set );
+
+      data_t data_tuple( &test_set, &g1, &g2, &g3, &g4, &sc );
 
       opt.set_lower_bounds( { 1.0, 1.5, 0.0001, 53.0 } );
       opt.set_upper_bounds( { 5.0, 2.5, 3.15, 450.0 } );
@@ -236,7 +240,7 @@ void test_direct( TestSet_t&             test_set,
       auto DeltaK_max = hs::calc_K_max( p, R );
       auto DKs        = generate_sequence( p.DeltaK_thr * ( 1.0 + 0.01 ), // From
                                     DeltaK_max * ( 1.0 - 0.01 ),   // To
-                                    500                             // Number of points
+                                    500                            // Number of points
       );
 
       auto  dadNs = crack_growth::Hartman_Schijve::evaluate( p, R, DKs );
@@ -247,8 +251,7 @@ void test_direct( TestSet_t&             test_set,
       {
         // g.color = plt::color::rgb( 255,165,0);
         g0.lineStyle = plt::LineStyle::Dash;
-      }
-      ;
+      };
     }
   }
   catch ( const std::exception& e )
@@ -277,7 +280,7 @@ int main( )
 
     auto DKs = generate_sequence( params.DeltaK_thr * ( 1.0 + 0.01 ), // From
                                   DeltaK_max * ( 1.0 - 0.01 ),        // To
-                                  30                                   // Number of points
+                                  30                                  // Number of points
     );
 
     auto dadNs = hs::evaluate( params, R, DKs );
@@ -292,7 +295,7 @@ int main( )
                            legend_alignment_
                            = plt::HorizontalAlignment::Right | plt::VerticalAlignment::Bottom );
 
-    win0.figure(0).graph(0).name="Data";
+    win0.figure( 0 ).graph( 0 ).name = "Data";
 
     std::vector< crack_growth::test_data_t< real_t > > test_set;
     crack_growth::test_data_t< real_t >                test_data;
@@ -306,22 +309,21 @@ int main( )
       test_set.emplace_back( test_data );
     }
 
+    auto scale = crack_growth::computeAxesScale< real_t >( test_set );
+    std::cout << "Scale: " << scale << std::endl;
+
+    auto d = crack_growth::Hartman_Schijve::minimum_distance< real_t >(
+      25.0, 5.0e-5, R, params.D, params.p, params.DeltaK_thr, params.A, scale );
+
+    std::cout << "Distance: " << std::get< 0 >( d ) << std::endl;
+
     for ( std::size_t i = 0; i != dadNs.size( ); i++ )
     {
       spdlog::info( "{},{}", DKs[ i ], dadNs[ i ] );
     }
 
-    auto model_distance = hs::distance( params, R, DKs, dadNs );
-
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
-
-    params.p       = 2;
-    model_distance = hs::distance( params, R, DKs, dadNs );
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
-
+    params.p          = 2;
     params.DeltaK_thr = 4;
-    model_distance    = hs::distance( params, R, DKs, dadNs );
-    spdlog::info( "Distance: {}, Util: {}", model_distance.distance, model_distance.utilization );
 
     // test_nelder_mead( test_set );
 
@@ -460,7 +462,7 @@ int main( )
     std::size_t i = 0;
     totalevals    = 0;
 
-    auto p        = hs::fit< real_t >(
+    auto p = hs::fit< real_t >(
       test_set,
       use_geometric,
       [ &i, &g1, &g3, &g4, &g5 ](
@@ -482,9 +484,11 @@ int main( )
       } );
 
     {
-      auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set );
+      auto sc = crack_growth::computeAxesScale< real_t >( test_set );
 
-      //auto model_distance = hs::distance( p, R, DKs, dadNs );
+      auto d = crack_growth::Hartman_Schijve::objective_function( p, use_geometric, test_set, sc );
+
+      // auto model_distance = hs::distance( p, R, DKs, dadNs );
 
       spdlog::info( "{:<75}, obj:{:.4f}, D: {:.2g}, p: {:.2f}, DKthr: {:.2f}, A:{:.2f}",
                     "CUHYSO:",
@@ -497,7 +501,7 @@ int main( )
       auto  DeltaK_max = hs::calc_K_max( p, R );
       auto  DKs        = generate_sequence( p.DeltaK_thr * ( 1.0 + 0.01 ), // From
                                     DeltaK_max * ( 1.0 - 0.01 ),   // To
-                                    500                             // Number of points
+                                    500                            // Number of points
       );
       auto  dadNs      = hs::evaluate( p, R, DKs );
       auto& g          = win0.add_graph( DKs, dadNs );
@@ -506,8 +510,8 @@ int main( )
 
     test_direct( test_set, f1, f3, f4, f5, win0 );
 
-   // auto w = 2000;
-   // auto h = int( 265.0 / 490.0 * 2000 );
+    // auto w = 2000;
+    // auto h = int( 265.0 / 490.0 * 2000 );
     plot_window1.save( "a.pdf" );
     plot_window3.save( "DKthr.pdf" );
     plot_window4.save( "p.pdf" );
