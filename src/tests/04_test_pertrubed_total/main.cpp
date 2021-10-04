@@ -233,7 +233,7 @@ void test_direct( TestSet_t&             test_set,
       opt.set_lower_bounds( { 1.0, 1.5, 0.0001, 53.0 } );
       opt.set_upper_bounds( { 5.0, 2.5, 3.15, 450.0 } );
       opt.set_min_objective( obj, static_cast< void* >( &data_tuple ) );
-      opt.set_maxtime( 410 ); // SECONDS
+      opt.set_maxtime( 120 ); // SECONDS
 
       std::vector< double > x_optim = { 1.2, 1.6, 0.01, 100.0 };
 
@@ -532,6 +532,7 @@ int main( )
     plot_window3.save( "DKthr.pdf" );
     plot_window4.save( "p.pdf" );
     plot_window5.save( "D.pdf" );
+    win0.save("dadNDKthr.pdf");
     return 0;
   } );
 }

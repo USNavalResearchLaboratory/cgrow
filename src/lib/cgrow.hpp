@@ -181,6 +181,10 @@ Container_t evaluate( const parameters< T >& params, const T& R, const Container
   return dadNs;
 }
 
+// TODO: Instead of using the distance on the two axes, use the product of the distances on the two
+// axes. I think this needs finding the horizontal intersection (i.e. the line with constant dadNi),
+// which is the minimization we need to perform because the other distance can be directly evaluated
+// from the function
 template< class T >
 T DistanceScaled( const T& DeltaK,
                   const T& DeltaKi,
@@ -225,6 +229,40 @@ T DistanceDeriv( const T& DeltaK,
                  * ( log( dadNi )
                      - 1. * log( DD * pow( S2 / sqrt( 1. + DeltaK / ( A * S1 ) ), p ) ) ) )
                  / ( ( DeltaK + A * S1 ) * S2 ) );
+}
+
+// todo: this needs more work and although CUHYSO works, others don't in test4.
+template< typename T >
+auto minimum_distance2( const T& DeltaKi,
+                        const T& dadNi,
+                        const T& R,
+                        const T& DD,
+                        const T& p,
+                        const T& DeltaKthr,
+                        const T& A,
+                        const T& scale )
+{
+
+  T S1 = T( 1.0 ) / A;
+  T S2 = T( 1.0 ) / ( -1. + R );
+  T S3 = pow( dadNi / DD, 2. / p );
+
+  T v
+    = 0.03557437224960084 * pow( scale, 2 )
+      * pow(
+        log( dadNi )
+          - 1.
+              * log( DD * pow( ( DeltaKi - 1. * DeltaKthr ) / sqrt( 1. + DeltaKi * S1 * S2 ), p ) ),
+        2 )
+      * pow( log( DeltaKi )
+               - 1.
+                   * log( 0.5
+                          * ( 2. * DeltaKthr + S1 * S2 * S3
+                              + sqrt( 4. * ( -1. * pow( DeltaKthr, 2 ) + S3 )
+                                      + pow( -2. * DeltaKthr + S3 / ( A - 1. * A * R ), 2 ) ) ) ),
+             2 );
+
+  return std::make_tuple( v, std::size_t( 0 ) );
 }
 
 template< typename T >
@@ -352,7 +390,7 @@ Model_Distance_t< T > objective_function( const parameters< T >& hs_params,
 
         auto dis = std::abs( std::log10( evaluate( hs_params, test.R, point.DeltaK ) )
                              - std::log10( point.dadN ) );
-        if ( !std::isnan( dis ) )
+        if ( std::isfinite( dis ) )
         {
           sum += dis;
         }
@@ -372,6 +410,11 @@ Model_Distance_t< T > objective_function( const parameters< T >& hs_params,
   //  }
 
   double utilization = double( num_utlized_points ) / num_data_points;
+
+  if ( num_utlized_points == 0 )
+  {
+    return Model_Distance_t( T(1000000.0), 0.0 );
+  }
 
   return Model_Distance_t { sum / num_utlized_points, utilization };
 }

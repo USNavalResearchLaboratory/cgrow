@@ -5,10 +5,10 @@
 
 #include <vector>
 
-constexpr double tA     = 112.32;
-constexpr double tD     = 4.32e-10;
-constexpr double tp     = 2.23;
-constexpr double tDKThr = 3.08;
+constexpr double tA     = 116.81;
+constexpr double tD     = 3.9e-10;
+constexpr double tp     = 2.29;
+constexpr double tDKThr = 3.04;
 
 constexpr int figWidth  = 640;
 constexpr int figHeight = 280;
@@ -337,7 +337,7 @@ int main( )
                                    ylabel_      = "A",
                                    show_legend_ = true,
                                    ylim_        = { 0, 500 },
-                                   xlim_        = { 1, 2e8 },
+                                   xlim_        = { 1, 2e10 },
                                    auto_fit_    = false,
                                    window_size_ = { figWidth, figHeight } );
 
@@ -345,7 +345,7 @@ int main( )
 
     {
       auto& target = f1.graph( 0 );
-      target.append_data( { 1, 1e8 }, { tA, tA } );
+      target.append_data( { 1, 2e10 }, { tA, tA } );
       target.color     = plt::color::rgb( 80, 80, 80 );
       target.lineStyle = plt::LineStyle::Dash;
       target.name      = "Reference";
@@ -366,7 +366,7 @@ int main( )
                                    ylabel_           = "ΔΚthr",
                                    show_legend_      = true,
                                    ylim_             = { 0, 4 },
-                                   xlim_             = { 1, 2e8 },
+                                   xlim_             = { 1, 2e10 },
                                    auto_fit_         = false,
                                    legend_alignment_ = plt::HorizontalAlignment::Right
                                                        | plt::VerticalAlignment::Bottom,
@@ -397,7 +397,7 @@ int main( )
                                    ylabel_      = "p",
                                    show_legend_ = true,
                                    ylim_        = { 1, 2.6 },
-                                   xlim_        = { 1, 2e8 },
+                                   xlim_        = { 1, 2e10 },
                                    auto_fit_    = false,
                                    window_size_ = { figWidth, figHeight } );
 
@@ -426,7 +426,7 @@ int main( )
                                    ylabel_      = "D",
                                    show_legend_ = true,
                                    ylim_        = { 1E-11, 6E-10 },
-                                   xlim_        = { 1, 2e8 },
+                                   xlim_        = { 1, 2e10 },
                                    auto_fit_    = false,
                                    window_size_ = { figWidth, figHeight } );
 

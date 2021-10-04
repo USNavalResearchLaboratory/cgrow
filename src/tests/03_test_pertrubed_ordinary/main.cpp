@@ -6,10 +6,10 @@
 #include <random>
 #include <vector>
 
-constexpr double tA     = 112.32;
-constexpr double tD     = 4.32e-10;
-constexpr double tp     = 2.23;
-constexpr double tDKThr = 3.08;
+constexpr double tA     = 116.81;
+constexpr double tD     = 3.9e-10;
+constexpr double tp     = 2.29;
+constexpr double tDKThr = 3.04;
 
 constexpr int figWidth  = 640;
 constexpr int figHeight = 280;
@@ -136,9 +136,10 @@ void test_direct( TestSet_t&             test_set,
 
   using namespace cxxplot::named_parameters;
 
-  using data_t = std::tuple< TestSet_t*, plt::graph*, plt::graph*, plt::graph*, plt::graph*, real_t*  >;
+  using data_t
+    = std::tuple< TestSet_t*, plt::graph*, plt::graph*, plt::graph*, plt::graph*, real_t* >;
 
-  auto obj = [ ]( const std::vector< double >& vals, std::vector< double >&, void* data ) {
+  auto obj = []( const std::vector< double >& vals, std::vector< double >&, void* data ) {
     data_t& data_cast = *static_cast< data_t* >( data );
 
     TestSet_t&  test_set = *std::get< 0 >( data_cast );
@@ -146,7 +147,7 @@ void test_direct( TestSet_t&             test_set,
     plt::graph& graph2   = *std::get< 2 >( data_cast );
     plt::graph& graph3   = *std::get< 3 >( data_cast );
     plt::graph& graph4   = *std::get< 4 >( data_cast );
-    real_t &sc = *std::get< 5 >( data_cast );
+    real_t&     sc       = *std::get< 5 >( data_cast );
 
     //  std::cout << test_set[0].points.size() << std::endl;
     using real_t = long double;
@@ -234,45 +235,58 @@ void test_direct( TestSet_t&             test_set,
       opt.set_lower_bounds( { 1.0, 1.5, 0.0001, 53.0 } );
       opt.set_upper_bounds( { 5.0, 2.5, 3.15, 450.0 } );
       opt.set_min_objective( obj, static_cast< void* >( &data_tuple ) );
-      opt.set_maxtime( 60 ); // SECONDS
+      opt.set_maxtime( 120 ); // SECONDS
 
       std::vector< double > x_optim = { 1.2, 1.6, 0.01, 100.0 };
 
       double f_optim;
 
-      fmin1    = 1e8;
-      evals    = 0;
-      auto res = opt.optimize( x_optim, f_optim );
+      fmin1 = 1e8;
+      evals = 0;
 
       std::string name = opt.get_algorithm_name( );
 
-      spdlog::info( "{:<75}, obj:{:.4f}, D: {:.2g}, p: {:.2f}, DKthr: {:.2f}, A:{:.2f}",
-                    name,
-                    f_optim,
-                    x_optim[ 0 ] * 1e-10,
-                    x_optim[ 1 ],
-                    x_optim[ 2 ],
-                    x_optim[ 3 ] );
-
-      namespace hs               = crack_growth::Hartman_Schijve;
-      real_t                   R = 0.8;
-      hs::parameters< real_t > p { x_optim[ 0 ] * 1e-10, x_optim[ 1 ], x_optim[ 2 ], x_optim[ 3 ] };
-
-      auto DeltaK_max = hs::calc_K_max( p, R );
-      auto DKs        = generate_sequence( p.DeltaK_thr * ( 1.0 + 0.01 ), // From
-                                    DeltaK_max * ( 1.0 - 0.01 ),   // To
-                                    500                            // Number of points
-      );
-
-      auto  dadNs = crack_growth::Hartman_Schijve::evaluate( p, R, DKs );
-      auto& g0    = win0.add_graph( DKs, dadNs );
-      g0.name     = toString( optimizer );
-
-      if ( optimizer == GN_AGS )
+      try
       {
-        // g.color = plt::color::rgb( 255,165,0);
-        g0.lineStyle = plt::LineStyle::Dash;
-      };
+        auto res = opt.optimize( x_optim, f_optim );
+
+        spdlog::info( "{:<75}, obj:{:.4f}, D: {:.2g}, p: {:.2f}, DKthr: {:.2f}, A:{:.2f}",
+                      name,
+                      f_optim * 1000.0,
+                      x_optim[ 0 ] * 1e-10,
+                      x_optim[ 1 ],
+                      x_optim[ 2 ],
+                      x_optim[ 3 ] );
+
+        namespace hs               = crack_growth::Hartman_Schijve;
+        real_t                   R = 0.8;
+        hs::parameters< real_t > p {
+          x_optim[ 0 ] * 1e-10, x_optim[ 1 ], x_optim[ 2 ], x_optim[ 3 ]
+        };
+
+        auto DeltaK_max = hs::calc_K_max( p, R );
+        auto DKs        = generate_sequence( p.DeltaK_thr * ( 1.0 + 0.01 ), // From
+                                      DeltaK_max * ( 1.0 - 0.01 ),   // To
+                                      500                            // Number of points
+        );
+
+        auto  dadNs = crack_growth::Hartman_Schijve::evaluate( p, R, DKs );
+        auto& g0    = win0.add_graph( DKs, dadNs );
+        g0.name     = toString( optimizer );
+
+        if ( optimizer == GN_AGS )
+        {
+          // g.color = plt::color::rgb( 255,165,0);
+          g0.lineStyle = plt::LineStyle::Dash;
+        };
+      }
+      catch ( std::exception& e )
+      {
+        std::cerr << name << ": " << e.what( ) << std::endl;
+        auto& f  = win0.figure( 0 );
+        auto& g0 = f.add_graph( std::vector< real_t > { 1e1 }, std::vector< real_t > { 2e-8 } );
+        g0.name  = toString( optimizer ) + " (failed)";
+      }
     }
   }
   catch ( const std::exception& e )
@@ -514,7 +528,7 @@ int main( )
 
       spdlog::info( "{:<75}, obj:{:.4f}, D: {:.2g}, p: {:.2f}, DKthr: {:.2f}, A:{:.2f}",
                     "CUHYSO:",
-                    d.distance,
+                    d.distance * 1000.0,
                     p.D,
                     p.p,
                     p.DeltaK_thr,

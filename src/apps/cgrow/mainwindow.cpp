@@ -341,8 +341,8 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
     {
       norm_type = new QComboBox;
-      norm_type->addItem( tr( "Algebraic" ) );
-      norm_type->addItem( tr( "Geometric" ) );
+      norm_type->addItem( tr( "Regular LS" ) );
+      norm_type->addItem( tr( "Total LS" ) );
 
       ogrid->addWidget( new QLabel( "Norm:" ), ++s, 0, 1, 3 );
       ogrid->addWidget( norm_type, s, 3, 1, 1 );
