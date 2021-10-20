@@ -191,6 +191,7 @@ private:
   QAction* save_file_action;
   QAction* compute_action;
   QAction* to_excel_action;
+  QAction *to_tabulated_action;
 
   QLineEdit* D_min;
   QLineEdit* D_max;

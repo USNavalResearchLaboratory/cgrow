@@ -87,6 +87,8 @@ void tests_list_widget::clear( )
 
     delete list->takeItem( id );
 
+    current_test_number = 0;
+
     emit test_series_removed( id );
   }
 }

@@ -568,6 +568,44 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   }
 
   {
+    to_tabulated_action = new QAction( tr( "To Table" ), this );
+
+    to_tabulated_action->setIcon( QIcon( "://assets/icons/to_table.png" ) );
+    to_tabulated_action->setShortcut( tr( "Ctrl+T" ) );
+    to_tabulated_action->setStatusTip( tr( "Export results to a tabulated form." ) );
+
+    toolbar->addAction( to_tabulated_action );
+
+    connect( to_tabulated_action, &QAction::triggered, [ this ]( ) {
+      QClipboard* clipboard = QApplication::clipboard( );
+
+      auto text = QString( "%1\t%2\t%3\t%4")
+                    .arg( double( computed_.D ) )
+                    .arg( double( computed_.p ) )
+                    .arg( double( computed_.DeltaK_thr ) )
+                    .arg( double( computed_.A ) );
+
+      clipboard->setText( text, QClipboard::Clipboard );
+
+      if ( clipboard->supportsSelection( ) )
+      {
+        clipboard->setText( text, QClipboard::Selection );
+      }
+
+#if defined( Q_OS_LINUX )
+      QThread::msleep( 1 ); // workaround for copied text not being available...
+#endif
+
+      QMessageBox::information( this,
+                                tr( "Table export" ),
+                                tr( "Table copied to clipboard.\n"
+                                    "Order: D p ΔKthr A\n" ) );
+    } );
+
+    to_excel_action->setEnabled( false );
+  }
+
+  {
     font_size_spinbox
       = new decorated_double_spinbox( "", 9, 0.5, 200, QPixmap( "://assets/icons/font_size.png" ) );
     font_size_spinbox->setMaximumWidth( 128 );
