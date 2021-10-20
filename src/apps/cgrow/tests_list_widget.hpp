@@ -75,4 +75,6 @@ private:
   QVector< test_series_t > tests_;
 
   int current_test_number = 0;
+
+  int runningColorId = 0;
 };

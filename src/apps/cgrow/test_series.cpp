@@ -156,20 +156,19 @@ QCPScatterStyle::ScatterShape test_series_t::indexToScatterShape( int index )
 {
     switch ( index )
     {
-    case  0: return QCPScatterStyle::ssDot;
-    case  1: return QCPScatterStyle::ssCross;
-    case  2: return QCPScatterStyle::ssPlus;
-    case  3: return QCPScatterStyle::ssCircle;
-    case  4: return QCPScatterStyle::ssDisc;
-    case  5: return QCPScatterStyle::ssSquare;
-    case  6: return QCPScatterStyle::ssDiamond;
-    case  7: return QCPScatterStyle::ssTriangle;
-    case  8: return QCPScatterStyle::ssTriangleInverted;
-    case  9: return QCPScatterStyle::ssCrossSquare;
-    case 10: return QCPScatterStyle::ssPlusSquare;
-    case 11: return QCPScatterStyle::ssCrossCircle;
-    case 12: return QCPScatterStyle::ssPlusCircle;
-    case 13: return QCPScatterStyle::ssPeace;
+    case  0: return QCPScatterStyle::ssCross;
+    case  1: return QCPScatterStyle::ssPlus;
+    case  2: return QCPScatterStyle::ssCircle;
+    case  3: return QCPScatterStyle::ssDisc;
+    case  4: return QCPScatterStyle::ssSquare;
+    case  5: return QCPScatterStyle::ssDiamond;
+    case  6: return QCPScatterStyle::ssTriangle;
+    case  7: return QCPScatterStyle::ssTriangleInverted;
+    case  8: return QCPScatterStyle::ssCrossSquare;
+    case  9: return QCPScatterStyle::ssPlusSquare;
+    case 10: return QCPScatterStyle::ssCrossCircle;
+    case 11: return QCPScatterStyle::ssPlusCircle;
+    case 12: return QCPScatterStyle::ssPeace;
     default:
         throw std::runtime_error("Invalid index when converting to ScatterShape");
     }
@@ -179,20 +178,19 @@ int test_series_t::ScatterShapeToIndex(QCPScatterStyle::ScatterShape ss)
 {
     switch ( ss )
     {
-    case QCPScatterStyle::ssDot: return 0;
-    case QCPScatterStyle::ssCross: return 1;
-    case QCPScatterStyle::ssPlus: return 2;
-    case QCPScatterStyle::ssCircle: return 3;
-    case QCPScatterStyle::ssDisc: return 4;
-    case QCPScatterStyle::ssSquare: return 5;
-    case QCPScatterStyle::ssDiamond: return 6;
-    case QCPScatterStyle::ssTriangle: return 7;
-    case QCPScatterStyle::ssTriangleInverted: return 8;
-    case QCPScatterStyle::ssCrossSquare: return 9;
-    case QCPScatterStyle::ssPlusSquare: return 10;
-    case QCPScatterStyle::ssCrossCircle: return 11;
-    case QCPScatterStyle::ssPlusCircle: return 12;
-    case QCPScatterStyle::ssPeace: return 13;
+    case QCPScatterStyle::ssCross: return 0;
+    case QCPScatterStyle::ssPlus: return 1;
+    case QCPScatterStyle::ssCircle: return 2;
+    case QCPScatterStyle::ssDisc: return 3;
+    case QCPScatterStyle::ssSquare: return 4;
+    case QCPScatterStyle::ssDiamond: return 5;
+    case QCPScatterStyle::ssTriangle: return 6;
+    case QCPScatterStyle::ssTriangleInverted: return 7;
+    case QCPScatterStyle::ssCrossSquare: return 8;
+    case QCPScatterStyle::ssPlusSquare: return 9;
+    case QCPScatterStyle::ssCrossCircle: return 10;
+    case QCPScatterStyle::ssPlusCircle: return 11;
+    case QCPScatterStyle::ssPeace: return 12;
     default:
         throw std::runtime_error("Invalid ScatterShape");
     }

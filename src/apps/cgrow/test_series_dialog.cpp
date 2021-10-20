@@ -13,12 +13,20 @@
 #include <QDialogButtonBox>
 #include <QDoubleValidator>
 
-testDataItemDialog::testDataItemDialog(int test_number, QWidget *parent ):
+
+testDataItemDialog::testDataItemDialog(int test_number, double defaultR, QWidget *parent ):
     QDialog( parent )
 {
     test_series_.set_id( QString("Crack Growth %1").arg( test_number ) );
 
     name_line_edit = new QLineEdit( test_series_.id() );
+
+    // Cycle through styles
+    auto color = QColorDialog::standardColor( test_number  % 48  );
+    test_series_.marker.set_color( color );
+    test_series_.marker.set_shape( test_series_t::indexToScatterShape( test_number  % 13 ));
+
+    test_series_.data.R = defaultR;
 
     connect( name_line_edit, &QLineEdit::textChanged, [this](const QString new_text )
     {
@@ -71,7 +79,7 @@ testDataItemDialog::testDataItemDialog(int test_number, QWidget *parent ):
     auto validator = new QDoubleValidator( this );
     validator->setRange(-1.0, 1.0, 3 );
 
-    R_line_edit = new QLineEdit( QLatin1String("0.2") );
+    R_line_edit = new QLineEdit( QString("%1").arg(defaultR) );
     R_line_edit->setValidator( validator );
     connect( R_line_edit, &QLineEdit::textChanged, [this]( const QString &new_text )
     {
@@ -141,7 +149,7 @@ testDataItemDialog::testDataItemDialog(int test_number, QWidget *parent ):
 }
 
 testDataItemDialog::testDataItemDialog(const test_series_t &test_data, QWidget *parent):
-    testDataItemDialog(0, parent)
+    testDataItemDialog(0, test_data.data.R, parent)
 {
     test_series_ = test_data;
 
@@ -169,7 +177,7 @@ void testDataItemDialog::update_combo_box()
 
     auto tmp_test_data = test_series_;
 
-    for ( auto i = 0 ; i != 14; i ++ )
+    for ( auto i = 0 ; i != 13; i ++ )
     {
         tmp_test_data.marker.set_shape( test_series_t::indexToScatterShape( i ) );
 

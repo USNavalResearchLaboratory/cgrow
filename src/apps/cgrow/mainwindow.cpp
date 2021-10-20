@@ -637,7 +637,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
              this,
              SLOT( change_x_spec_label( QString ) ) );
 
-    auto y_spec_label = new QLineEdit( tr( "m/s" ) );
+    auto y_spec_label = new QLineEdit( tr( "m/cycle" ) );
     y_spec_label->setMinimumWidth( 64 );
     y_spec_label->setSizePolicy( QSizePolicy::Ignored, QSizePolicy::Minimum );
     connect( y_spec_label,

@@ -54,7 +54,7 @@ class spreadsheet;
 class testDataItemDialog : public QDialog
 {
 public:
-  testDataItemDialog( int test_number, QWidget* parent = 0 );
+  testDataItemDialog( int test_number, double defaultR, QWidget* parent = 0 );
 
   testDataItemDialog( const test_series_t& test_series_, QWidget* parent = 0 );
 

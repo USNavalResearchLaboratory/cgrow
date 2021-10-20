@@ -329,6 +329,8 @@ int main( )
                            x_axis_scaling_type_ = plt::axis_scaling_type::logarithmic,
                            y_axis_scaling_type_ = plt::axis_scaling_type::logarithmic,
                            show_legend_         = true,
+                           xlabel_              = "ΔK",
+                           ylabel_              = "da/dN",
                            legend_alignment_
                            = plt::HorizontalAlignment::Right | plt::VerticalAlignment::Bottom );
 
