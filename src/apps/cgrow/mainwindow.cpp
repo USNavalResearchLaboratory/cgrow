@@ -27,36 +27,35 @@ namespace cg = crack_growth;
 
 struct lineType
 {
-  QColor color;
+  QColor       color;
   Qt::PenStyle ps;
 };
 
-std::array<lineType,20> standardLineTypes =
-  {
-    lineType{QColor{220,0,0}, Qt::PenStyle::SolidLine} ,
-    lineType{QColor{0,220,0}, Qt::PenStyle::SolidLine} ,
-    lineType{QColor{0,0,220}, Qt::PenStyle::SolidLine} ,
-    lineType{QColor{200,0,200}, Qt::PenStyle::SolidLine},
-    lineType{QColor{0,200,200}, Qt::PenStyle::SolidLine},
+std::array< lineType, 20 > standardLineTypes = {
+  lineType { QColor { 220, 0, 0 }, Qt::PenStyle::SolidLine },
+  lineType { QColor { 0, 220, 0 }, Qt::PenStyle::SolidLine },
+  lineType { QColor { 0, 0, 220 }, Qt::PenStyle::SolidLine },
+  lineType { QColor { 200, 0, 200 }, Qt::PenStyle::SolidLine },
+  lineType { QColor { 0, 200, 200 }, Qt::PenStyle::SolidLine },
 
-    lineType{QColor{220,0,0}, Qt::PenStyle::DashLine} ,
-    lineType{QColor{0,220,0}, Qt::PenStyle::DashLine} ,
-    lineType{QColor{0,0,220}, Qt::PenStyle::DashLine} ,
-    lineType{QColor{200,0,200}, Qt::PenStyle::DashLine},
-    lineType{QColor{0,200,200}, Qt::PenStyle::DashLine},
+  lineType { QColor { 220, 0, 0 }, Qt::PenStyle::DashLine },
+  lineType { QColor { 0, 220, 0 }, Qt::PenStyle::DashLine },
+  lineType { QColor { 0, 0, 220 }, Qt::PenStyle::DashLine },
+  lineType { QColor { 200, 0, 200 }, Qt::PenStyle::DashLine },
+  lineType { QColor { 0, 200, 200 }, Qt::PenStyle::DashLine },
 
-    lineType{QColor{220,0,0}, Qt::PenStyle::DashDotLine} ,
-    lineType{QColor{0,220,0}, Qt::PenStyle::DashDotLine} ,
-    lineType{QColor{0,0,220}, Qt::PenStyle::DashDotLine} ,
-    lineType{QColor{200,0,200}, Qt::PenStyle::DashDotLine},
-    lineType{QColor{0,200,200}, Qt::PenStyle::DashDotLine},
+  lineType { QColor { 220, 0, 0 }, Qt::PenStyle::DashDotLine },
+  lineType { QColor { 0, 220, 0 }, Qt::PenStyle::DashDotLine },
+  lineType { QColor { 0, 0, 220 }, Qt::PenStyle::DashDotLine },
+  lineType { QColor { 200, 0, 200 }, Qt::PenStyle::DashDotLine },
+  lineType { QColor { 0, 200, 200 }, Qt::PenStyle::DashDotLine },
 
-    lineType{QColor{220,0,0}, Qt::PenStyle::DashDotDotLine} ,
-    lineType{QColor{0,220,0}, Qt::PenStyle::DashDotDotLine} ,
-    lineType{QColor{0,0,220}, Qt::PenStyle::DashDotDotLine} ,
-    lineType{QColor{200,0,200}, Qt::PenStyle::DashDotDotLine},
-    lineType{QColor{0,200,200}, Qt::PenStyle::DashDotDotLine},
-  };
+  lineType { QColor { 220, 0, 0 }, Qt::PenStyle::DashDotDotLine },
+  lineType { QColor { 0, 220, 0 }, Qt::PenStyle::DashDotDotLine },
+  lineType { QColor { 0, 0, 220 }, Qt::PenStyle::DashDotDotLine },
+  lineType { QColor { 200, 0, 200 }, Qt::PenStyle::DashDotDotLine },
+  lineType { QColor { 0, 200, 200 }, Qt::PenStyle::DashDotDotLine },
+};
 
 qreal screenScale( QWidget* widget )
 {
@@ -471,10 +470,20 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     toolbar->addAction( save_file_action );
 
     connect( save_file_action, &QAction::triggered, [ this ]( ) {
+
+      QString defaultFileName;
+
+      if ( tests_list->tests( ).size( ) == 1 )
+      {
+        defaultFileName = tests_list->tests( )[ 0 ].name( );
+      }
+
+      auto dir = QDir(current_directory_);
+
       QString fileName
         = QFileDialog::getSaveFileName( nullptr,
                                         tr( "Save data" ),
-                                        current_directory_,
+                                        dir.absoluteFilePath( defaultFileName ),
                                         tr( "Crack Groth Files (*.cg.json);; All Files (*.*)" ) );
 
       if ( fileName.isEmpty( ) )
@@ -579,7 +588,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     connect( to_tabulated_action, &QAction::triggered, [ this ]( ) {
       QClipboard* clipboard = QApplication::clipboard( );
 
-      auto text = QString( "%1\t%2\t%3\t%4")
+      auto text = QString( "%1\t%2\t%3\t%4" )
                     .arg( double( computed_.D ) )
                     .arg( double( computed_.p ) )
                     .arg( double( computed_.DeltaK_thr ) )
@@ -803,10 +812,19 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     save_image->setLayout( sgrid );
 
     connect( save_image_button, &QPushButton::clicked, [ this, save_image_width ]( ) {
+      QString defaultFileName;
+
+      if ( tests_list->tests( ).size( ) == 1 )
+      {
+        defaultFileName = tests_list->tests( )[ 0 ].name( );
+      }
+
+      auto dir = QDir(current_directory_);
+
       QString fileName
         = QFileDialog::getSaveFileName( nullptr,
                                         tr( "Save plot" ),
-                                        current_directory_,
+                                        dir.absoluteFilePath( defaultFileName ),
                                         tr( "PNG Files (*.png);; All Files (*.*)" ) );
 
       if ( fileName.isEmpty( ) )
@@ -932,14 +950,14 @@ void mainWindow::fit( )
     g->setName( QString( "Computed R = %1" ).arg( R ) );
     auto pen = g->pen( );
 
-    const auto &lt = standardLineTypes[iline++];
+    const auto& lt = standardLineTypes[ iline++ ];
 
     pen.setWidthF( 2.0f );
     pen.setColor( lt.color );
     pen.setStyle( lt.ps );
     g->setPen( pen );
 
-    if ( iline == standardLineTypes.size() )
+    if ( iline == standardLineTypes.size( ) )
     {
       iline = 0;
     }
