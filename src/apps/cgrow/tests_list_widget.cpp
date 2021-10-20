@@ -16,6 +16,8 @@
 tests_list_widget::tests_list_widget( QWidget* parent ) : QWidget( parent )
 {
   list = new QListWidget;
+  list->setSelectionMode( QAbstractItemView::ExtendedSelection );
+
   connect( list, SIGNAL( currentRowChanged( int ) ), this, SIGNAL( current_row_changed( int ) ) );
 
   auto add = new QPushButton( tr( "Add" ) );
@@ -160,6 +162,11 @@ void tests_list_widget::new_test_series_item( )
 
 void tests_list_widget::remove_test_series_item( )
 {
+  if ( list->selectedItems( ).size( ) == 0 )
+  {
+    return;
+  }
+
   auto data_index = list->currentRow( );
 
   if ( data_index == -1 )
@@ -167,28 +174,37 @@ void tests_list_widget::remove_test_series_item( )
     return;
   }
 
-  if ( list->selectedItems( ).size( ) == 0 )
+  auto selected = list->selectionModel( )->selectedRows( );
+
+  QVector< int > ids;
+
+  for ( auto s : selected )
   {
-    return;
+    ids.push_back( s.row( ) );
   }
+
+  std::sort( ids.begin( ), ids.end( ) );
 
   auto name = list->item( data_index )->text( );
 
-  int ret = QMessageBox::warning( this,
-                                  tr( "HS" ),
-                                  tr( "Are you sure you want to remove %1?" ).arg( name ),
-                                  QMessageBox::Yes | QMessageBox::Cancel );
+  int ret = QMessageBox::warning(
+    this,
+    tr( "HS" ),
+    tr( "Are you sure you want to remove %1? items" ).arg( list->selectedItems( ).size( ) ),
+    QMessageBox::Yes | QMessageBox::Cancel );
 
   if ( ret == QDialog::Rejected )
   {
     return;
   }
 
-  tests_.remove( data_index );
-
-  delete list->takeItem( data_index );
-
-  emit test_series_removed( data_index );
+  for ( auto iter = ids.rbegin( ); iter != ids.rend( ); iter++ )
+  {
+    tests_.remove( *iter );
+    delete list->takeItem( *iter );
+    emit test_series_removed( *iter );
+  }
+  // tests_.remove( data_index );
 }
 
 void tests_list_widget::edit_test_series_item( )
