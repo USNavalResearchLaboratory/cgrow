@@ -129,7 +129,7 @@ testDataItemDialog::testDataItemDialog(int test_number, double defaultR, QWidget
     {
         bool ok = false;
 
-        test_series_.data = data_table->get_data( ok );
+        test_series_.data.points = data_table->get_data( ok ).points;
 
         if ( ok )
         {

@@ -470,7 +470,6 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     toolbar->addAction( save_file_action );
 
     connect( save_file_action, &QAction::triggered, [ this ]( ) {
-
       QString defaultFileName;
 
       if ( tests_list->tests( ).size( ) == 1 )
@@ -478,7 +477,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
         defaultFileName = tests_list->tests( )[ 0 ].name( );
       }
 
-      auto dir = QDir(current_directory_);
+      auto dir = QDir( current_directory_ );
 
       QString fileName
         = QFileDialog::getSaveFileName( nullptr,
@@ -676,7 +675,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
   QWidget* axes_spec_labels = new QWidget;
   {
-    auto x_spec_label = new QLineEdit( tr( "MPa × m⁰·⁵" ) );
+    auto x_spec_label = new QLineEdit( tr( "ΔK (MPa × m⁰·⁵)" ) );
     x_spec_label->setMinimumWidth( 64 );
     x_spec_label->setSizePolicy( QSizePolicy::Ignored, QSizePolicy::Minimum );
     connect( x_spec_label,
@@ -819,7 +818,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
         defaultFileName = tests_list->tests( )[ 0 ].name( );
       }
 
-      auto dir = QDir(current_directory_);
+      auto dir = QDir( current_directory_ );
 
       QString fileName
         = QFileDialog::getSaveFileName( nullptr,
@@ -1364,7 +1363,7 @@ void mainWindow::change_marker_line_width( double new_width )
 
 void mainWindow::change_x_spec_label( QString spec )
 {
-  plot->xAxis->setLabel( QString( "ΔK (" ) + spec + ")" );
+  plot->xAxis->setLabel( QString( spec ) );
   plot->replot( );
 }
 
