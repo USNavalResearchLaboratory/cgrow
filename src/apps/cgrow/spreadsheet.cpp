@@ -418,7 +418,6 @@ void spreadsheet::findPrevious(const QString &str,
 
 void spreadsheet::somethingChanged()
 {
-    qDebug() << "something chagned";
     emit modified();
 }
 

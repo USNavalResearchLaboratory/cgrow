@@ -12,5 +12,6 @@
         <file>assets/icons/process_stop.png</file>
         <file>assets/icons/to_excel.png</file>
         <file>assets/icons/to_table.png</file>
+        <file>assets/icons/legend_columns.png</file>
     </qresource>
 </RCC>

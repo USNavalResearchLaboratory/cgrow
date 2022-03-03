@@ -34,9 +34,9 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from third
-// parties. These are available on an "as is" basis and subject to their individual license agreements.
-// Additional information can be found in the provided "licenses" folder.
+// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from
+// third parties. These are available on an "as is" basis and subject to their individual license
+// agreements. Additional information can be found in the provided "licenses" folder.
 
 #pragma once
 
@@ -50,6 +50,35 @@
 // Todo: move hs_parameters_t inside the fitting worker
 using real_t          = long double;
 using hs_parameters_t = crack_growth::Hartman_Schijve::parameters< real_t >;
+
+struct Hartman_Schijve_autoRange
+{
+  bool DeltaK_thr_low  = true;
+  bool DeltaK_thr_high = true;
+  bool A_low           = true;
+  bool A_high          = true;
+};
+
+namespace Hartman_Schijve
+{
+inline constexpr real_t min_DeltaK_thr = 0.000001;
+
+real_t calc_max_DeltaK_thr( const test_data_t& test );
+real_t calc_max_DeltaK_thr( const std::vector< test_data_t >& tests );
+
+real_t calc_min_A( const test_data_t& test );
+real_t calc_min_A( const std::vector< test_data_t >& tests );
+
+real_t calc_max_A( const real_t& Amin );
+real_t calc_max_A( const real_t& Amin );
+
+inline constexpr real_t minD = 1e-12;
+inline constexpr real_t maxD = 1e-4;
+
+inline constexpr real_t minp = 0.01;
+inline constexpr real_t maxp = 10.0;
+
+}
 
 Q_DECLARE_METATYPE( hs_parameters_t )
 
@@ -73,7 +102,9 @@ public slots:
             int                               subdivisions,
             double                            amortization,
             bool                              use_geometric,
-            const std::vector< test_data_t >& test_set );
+            const std::vector< test_data_t >& test_set,
+            Hartman_Schijve_autoRange         autoRange,
+            bool                              compute_individually = false );
 
   void stop( );
 
@@ -84,7 +115,14 @@ signals:
                        hs_parameters_t params_lower,
                        hs_parameters_t params_upper );
 
+  void individuallyUpdatedResults( hs_parameters_t params,
+                                   hs_parameters_t params_lower,
+                                   hs_parameters_t params_upper,
+                                   int             dataSetId );
+
   void progressReport( int, int );
+
+  void finished();
 
 private:
   bool stop_requested_ = false;

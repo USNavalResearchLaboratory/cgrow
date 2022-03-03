@@ -56,6 +56,7 @@
 #include <set>
 
 class decorated_double_spinbox;
+class decorated_int_spinbox;
 class tests_list_widget;
 class qcp_results_table;
 class fitting_worker;
@@ -76,7 +77,6 @@ public:
   explicit mainWindow( QWidget* parent = nullptr );
 
   ~mainWindow( );
-
 
   template< class T >
   void setLow( const std::vector< T >& DeltaKs, const std::vector< T >& dadNs )
@@ -129,11 +129,16 @@ private slots:
 
   void new_file( );
 
-  void fit( );
+  void fit( bool individually = false );
 
   void handleResults( hs_parameters_t params,
                       hs_parameters_t params_lower,
                       hs_parameters_t params_upper );
+
+  void handleIndividualResults( hs_parameters_t params,
+                                hs_parameters_t params_lower,
+                                hs_parameters_t params_upper,
+                                int             id );
 
   void handleProgressReport( int i, int total );
 
@@ -147,6 +152,8 @@ private slots:
 
   void change_font_size( double new_size );
 
+  void change_legend_columns( int columns );
+
   void change_axes_line_width( double new_size );
 
   void change_grid_lines_width( double new_size );
@@ -155,7 +162,7 @@ private slots:
 
   void change_marker_line_width( double new_width );
 
-  void change_x_spec_label( QString spec );
+  void change_x_spec_label();
 
   void change_y_spec_label( QString spec );
 
@@ -175,8 +182,13 @@ private slots:
 
 private:
   double tests_min_DeltaK_thr( );
+  double inividual_test_min_DeltaK_thr( std::size_t id );
 
   double tests_max_A( );
+  double inividual_test_max_A( int id );
+
+  void insert_graph( int index );
+
 
   QString current_directory_;
 
@@ -190,8 +202,9 @@ private:
   QAction* open_file_action;
   QAction* save_file_action;
   QAction* compute_action;
+  QAction* compute_individually_action;
   QAction* to_excel_action;
-  QAction *to_tabulated_action;
+  QAction* to_tabulated_action;
 
   QLineEdit* D_min;
   QLineEdit* D_max;
@@ -217,10 +230,14 @@ private:
   QComboBox* norm_type;
 
   decorated_double_spinbox* font_size_spinbox;
+  decorated_int_spinbox*    legend_columns_spinbox;
   decorated_double_spinbox* axes_line_width_spinbox;
   decorated_double_spinbox* grid_line_width_spinbox;
   decorated_double_spinbox* marker_size_spinbox;
   decorated_double_spinbox* marker_line_width_spinbox;
+
+  QLineEdit* x_quantity_label;
+  QLineEdit* x_units_label;
 
   QLineEdit* xmin_label;
   QCheckBox* xmin_auto;
@@ -244,11 +261,11 @@ private:
   QCPGraph* lower_bounds_graph = nullptr;
   QCPGraph* upper_bounds_graph = nullptr;
 
-  qcp_results_table* results_table_;
-
   int previously_selected_graph_index = -1;
 
-  hs_parameters_t computed_;
+  std::vector< hs_parameters_t > computed_;
+
+  std::vector< test_data_t > pull_tests_list( );
 };
 
 #endif // MAINWINDOW_HPP

@@ -241,6 +241,7 @@ void tests_list_widget::edit_test_series_item( )
   emit test_series_updated( data_index );
 }
 
+
 QIcon generate_scatter_icon( QCPScatterStyle::ScatterShape shape,
                              QColor                        color,
                              int                           size,

@@ -34,36 +34,54 @@
 // DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from third
-// parties. These are available on an "as is" basis and subject to their individual license agreements.
-// Additional information can be found in the provided "licenses" folder.
+// NOTICE OF THIRD-PARTY SOFTWARE LICENSES. This software uses open source software packages from
+// third parties. These are available on an "as is" basis and subject to their individual license
+// agreements. Additional information can be found in the provided "licenses" folder.
 
 #pragma once
 
-#include <QWidget>
 #include <QPixmap>
 #include <QString>
+#include <QWidget>
+
 
 class QDoubleSpinBox;
+class QSpinBox;
 
 class decorated_double_spinbox : public QWidget
 {
-    Q_OBJECT
+  Q_OBJECT
 public:
-    explicit decorated_double_spinbox(
-            const QString   &name,
-            const double    &value,
-            const double    &lower = std::numeric_limits<double>::lowest(),
-            const double    &upper = std::numeric_limits<double>::max(),
-            const QPixmap   &icon = QPixmap(),
-            QWidget         *parent = nullptr);
+  explicit decorated_double_spinbox( const QString& name,
+                                     const double&  value,
+                                     const double& lower = std::numeric_limits< double >::lowest( ),
+                                     const double& upper = std::numeric_limits< double >::max( ),
+                                     const QPixmap& icon = QPixmap( ),
+                                     QWidget*       parent = nullptr );
 
-    void set_single_step( double step );
+  void set_single_step( double step );
 
 signals:
-    void value_changed( double );
+  void value_changed( double );
 
 private:
-    QDoubleSpinBox *spinbox;
+  QDoubleSpinBox* spinbox;
+};
 
+class decorated_int_spinbox : public QWidget
+{
+  Q_OBJECT
+public:
+  explicit decorated_int_spinbox( const QString& name,
+                                  const int&     value,
+                                  const int&     lower  = std::numeric_limits< int >::lowest( ),
+                                  const int&     upper  = std::numeric_limits< int >::max( ),
+                                  const QPixmap& icon   = QPixmap( ),
+                                  QWidget*       parent = nullptr );
+
+signals:
+  void value_changed( int );
+
+private:
+  QSpinBox* spinbox;
 };

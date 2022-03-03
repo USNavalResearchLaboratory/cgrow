@@ -301,7 +301,7 @@ void minimize(
 
     progress_callback( i, iterations );
 
-    std::cout << minVal << std::endl;
+   // std::cout << minVal << std::endl;
     for ( auto k = 0; k != low.size( ); k++ )
     {
       std::tie( low[ k ], high[ k ] )
@@ -921,8 +921,8 @@ parameters< T > fit(
 
     progress_callback( t, iterations );
 
-    std::cout << search_space_min.D << " " << search_space_max.D << " " << params_at_min.D << " "
-              << objective_min << std::endl;
+//    std::cout << search_space_min.D << " " << search_space_max.D << " " << params_at_min.D << " "
+//              << objective_min << std::endl;
   }
 
   // TODO: Is this correct? For some reason it was not here

@@ -151,7 +151,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   //    textLabel->setFont(QFont(font().family(), 16)); // make font a bit larger
   //    textLabel->setPen(QPen(Qt::black));
 
-  results_table_ = new qcp_results_table( plot );
+  // results_table_ = new qcp_results_table( plot );
 
   //    auto margins = plot->axisRect()->minimumMargins();
 
@@ -174,7 +174,13 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
   connect( &workerThread, &QThread::finished, worker, &QObject::deleteLater );
   connect( worker, &fittingWorker::updatedResults, this, &mainWindow::handleResults );
+  connect( worker,
+           &fittingWorker::individuallyUpdatedResults,
+           this,
+           &mainWindow::handleIndividualResults );
   connect( worker, &fittingWorker::progressReport, this, &mainWindow::handleProgressReport );
+
+  connect( worker, &fittingWorker::finished, this, &mainWindow::handle_fitting_finished );
 
   workerThread.start( );
 
@@ -237,10 +243,10 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     {
       auto validator = new QDoubleValidator( 0, 1e100, 10 );
 
-      D_min = new QLineEdit( "1e-10" );
+      D_min = new QLineEdit( "1e-12" );
       D_min->setValidator( validator );
 
-      D_max = new QLineEdit( "5e-7" );
+      D_max = new QLineEdit( "5e-5" );
       D_max->setValidator( validator );
 
       fgrid->addWidget( new QLabel( "D:" ), ++q, 0, 1, 1 );
@@ -251,10 +257,10 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     {
       auto validator = new QDoubleValidator( 0, 10, 4 );
 
-      p_min = new QLineEdit( "1.5" );
+      p_min = new QLineEdit( "0.1" );
       p_min->setValidator( validator );
 
-      p_max = new QLineEdit( "2.5" );
+      p_max = new QLineEdit( "9.0" );
       p_max->setValidator( validator );
 
       fgrid->addWidget( new QLabel( "p:" ), ++q, 0, 1, 1 );
@@ -323,7 +329,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     {
       auto validator = new QIntValidator( 3, 1000 );
 
-      subdivisions = new QLineEdit( "7" );
+      subdivisions = new QLineEdit( "14" );
       subdivisions->setValidator( validator );
       ogrid->addWidget( new QLabel( "Subdivisions per dimension:" ), ++s, 0, 1, 3 );
       ogrid->addWidget( subdivisions, s, 3, 1, 1 );
@@ -332,7 +338,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     {
       auto validator = new QDoubleValidator( 1.0000001, 1000, 4 );
 
-      amortization = new QLineEdit( "1.02" );
+      amortization = new QLineEdit( "1.1" );
       amortization->setValidator( validator );
       ogrid->addWidget( new QLabel( "Amortization:" ), ++s, 0, 1, 3 );
       ogrid->addWidget( amortization, s, 3, 1, 1 );
@@ -340,7 +346,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
     {
       norm_type = new QComboBox;
-      norm_type->addItem( tr( "Regular LS" ) );
+      norm_type->addItem( tr( "Ordinary LS" ) );
       norm_type->addItem( tr( "Total LS" ) );
 
       ogrid->addWidget( new QLabel( "Norm:" ), ++s, 0, 1, 3 );
@@ -526,7 +532,31 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     connect( compute_action, &QAction::triggered, [ this ]( ) {
       if ( !worker->running( ) )
       {
-        fit( );
+        bool individually = false;
+        fit( individually );
+      }
+      else
+      {
+        worker->stop( );
+      }
+    } );
+  }
+
+  {
+    compute_individually_action = new QAction( tr( "Compute Individually" ), this );
+
+    compute_individually_action->setIcon( QIcon( "://assets/icons/process.png" ) );
+    compute_individually_action->setShortcut( tr( "Ctrl+I" ) );
+    compute_individually_action->setStatusTip(
+      tr( "Compute HS parameters individually for each dataset." ) );
+
+    toolbar->addAction( compute_individually_action );
+
+    connect( compute_individually_action, &QAction::triggered, [ this ]( ) {
+      if ( !worker->running( ) )
+      {
+        bool individually = true;
+        fit( individually );
       }
       else
       {
@@ -547,18 +577,24 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     connect( to_excel_action, &QAction::triggered, [ this ]( ) {
       QClipboard* clipboard = QApplication::clipboard( );
 
-      auto text = QString( "= %2 * power( (%1 - %4) / sqrt( 1 - %1/ ( %5 * ( 1.0 - R ) ) ), %3)" )
-                    .arg( "INDIRECT(\"RC[-1]\",0)" )
-                    .arg( double( computed_.D ) )
-                    .arg( double( computed_.p ) )
-                    .arg( double( computed_.DeltaK_thr ) )
-                    .arg( double( computed_.A ) );
+      QString table;
+      for ( const auto& c : computed_ )
+      {
+        auto text
+          = QString( "= %2 * power( (%1 - %4) / sqrt( 1 - %1/ ( %5 * ( 1.0 - R ) ) ), %3)\n" )
+              .arg( "INDIRECT(\"RC[-1]\",0)" )
+              .arg( double( c.D ) )
+              .arg( double( c.p ) )
+              .arg( double( c.DeltaK_thr ) )
+              .arg( double( c.A ) );
+        table.append( text );
+      }
 
-      clipboard->setText( text, QClipboard::Clipboard );
+      clipboard->setText( table, QClipboard::Clipboard );
 
       if ( clipboard->supportsSelection( ) )
       {
-        clipboard->setText( text, QClipboard::Selection );
+        clipboard->setText( table, QClipboard::Selection );
       }
 
 #if defined( Q_OS_LINUX )
@@ -587,17 +623,24 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     connect( to_tabulated_action, &QAction::triggered, [ this ]( ) {
       QClipboard* clipboard = QApplication::clipboard( );
 
-      auto text = QString( "%1\t%2\t%3\t%4" )
-                    .arg( double( computed_.D ) )
-                    .arg( double( computed_.p ) )
-                    .arg( double( computed_.DeltaK_thr ) )
-                    .arg( double( computed_.A ) );
+      QString     table( "Name\tD\tp\tΔKthr\tΑ\n" );
+      std::size_t id = 0;
+      for ( const auto& c : computed_ )
+      {
+        auto text = QString( "%1\t%2\t%3\t%4\t%5\n" )
+                      .arg( tests_list->tests( )[ id++ ].name( ) )
+                      .arg( double( c.D ) )
+                      .arg( double( c.p ) )
+                      .arg( double( c.DeltaK_thr ) )
+                      .arg( double( c.A ) );
+        table.append( text );
+      }
 
-      clipboard->setText( text, QClipboard::Clipboard );
+      clipboard->setText( table, QClipboard::Clipboard );
 
       if ( clipboard->supportsSelection( ) )
       {
-        clipboard->setText( text, QClipboard::Selection );
+        clipboard->setText( table, QClipboard::Selection );
       }
 
 #if defined( Q_OS_LINUX )
@@ -616,6 +659,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   {
     font_size_spinbox
       = new decorated_double_spinbox( "", 9, 0.5, 200, QPixmap( "://assets/icons/font_size.png" ) );
+    font_size_spinbox->setToolTip( tr( "Graph elements font size." ) );
     font_size_spinbox->setMaximumWidth( 128 );
     font_size_spinbox->set_single_step( 1 );
     font_size_spinbox->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
@@ -626,8 +670,21 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   }
 
   {
+    legend_columns_spinbox
+      = new decorated_int_spinbox( "", 1, 1, 20, QPixmap( "://assets/icons/legend_columns.png" ) );
+    legend_columns_spinbox->setToolTip( tr( "Number of legend columns." ) );
+    legend_columns_spinbox->setMaximumWidth( 128 );
+    legend_columns_spinbox->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
+    connect( legend_columns_spinbox,
+             SIGNAL( value_changed( int ) ),
+             this,
+             SLOT( change_legend_columns( int ) ) );
+  }
+
+  {
     axes_line_width_spinbox = new decorated_double_spinbox(
       "", 1, 0.25, 200, QPixmap( "://assets/icons/axes_line_width.png" ) );
+    axes_line_width_spinbox->setToolTip( tr( "Graph axes line width." ) );
     axes_line_width_spinbox->setMaximumWidth( 128 );
     axes_line_width_spinbox->set_single_step( 0.25 );
     axes_line_width_spinbox->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
@@ -640,6 +697,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   {
     grid_line_width_spinbox = new decorated_double_spinbox(
       "", 1, 0.25, 200, QPixmap( "://assets/icons/grid_line_width.png" ) );
+    grid_line_width_spinbox->setToolTip( tr( "Grid lines width." ) );
     grid_line_width_spinbox->setMaximumWidth( 128 );
     grid_line_width_spinbox->set_single_step( 0.25 );
     grid_line_width_spinbox->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
@@ -652,6 +710,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   {
     marker_size_spinbox = new decorated_double_spinbox(
       "", 6, 0.5, 200, QPixmap( "://assets/icons/marker_resize.png" ) );
+    marker_size_spinbox->setToolTip( tr( "Data series marker size." ) );
     marker_size_spinbox->setMaximumWidth( 128 );
     marker_size_spinbox->set_single_step( 0.5 );
     marker_size_spinbox->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
@@ -664,6 +723,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   {
     marker_line_width_spinbox = new decorated_double_spinbox(
       "", 1.5, 0.25, 200, QPixmap( "://assets/icons/marker_line_width.png" ) );
+    marker_size_spinbox->setToolTip( tr( "Data series marker line width." ) );
     marker_line_width_spinbox->setMaximumWidth( 128 );
     marker_line_width_spinbox->set_single_step( 0.25 );
     marker_line_width_spinbox->setSizePolicy( QSizePolicy::Minimum, QSizePolicy::Minimum );
@@ -675,13 +735,17 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
   QWidget* axes_spec_labels = new QWidget;
   {
-    auto x_spec_label = new QLineEdit( tr( "ΔK (MPa × m⁰·⁵)" ) );
-    x_spec_label->setMinimumWidth( 64 );
-    x_spec_label->setSizePolicy( QSizePolicy::Ignored, QSizePolicy::Minimum );
-    connect( x_spec_label,
-             SIGNAL( textChanged( QString ) ),
-             this,
-             SLOT( change_x_spec_label( QString ) ) );
+    x_quantity_label = new QLineEdit( tr( "ΔK" ) );
+    x_quantity_label->setMinimumWidth( 64 );
+    x_quantity_label->setSizePolicy( QSizePolicy::Ignored, QSizePolicy::Minimum );
+    connect(
+      x_quantity_label, SIGNAL( textChanged( QString ) ), this, SLOT( change_x_spec_label( ) ) );
+
+    x_units_label = new QLineEdit( tr( "(MPa × m⁰·⁵)" ) );
+    x_units_label->setMinimumWidth( 64 );
+    x_units_label->setSizePolicy( QSizePolicy::Ignored, QSizePolicy::Minimum );
+    connect(
+      x_units_label, SIGNAL( textChanged( QString ) ), this, SLOT( change_x_spec_label( ) ) );
 
     auto y_spec_label = new QLineEdit( tr( "m/cycle" ) );
     y_spec_label->setMinimumWidth( 64 );
@@ -692,10 +756,12 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
              SLOT( change_y_spec_label( QString ) ) );
 
     auto ugrid = new QGridLayout;
-    ugrid->addWidget( new QLabel( "x spec. label: " ), 0, 0, 1, 1 );
-    ugrid->addWidget( x_spec_label, 1, 0, 1, 1 );
-    ugrid->addWidget( new QLabel( "y spec. label: " ), 2, 0, 1, 1 );
-    ugrid->addWidget( y_spec_label, 3, 0, 1, 1 );
+    ugrid->addWidget( new QLabel( "x quantity label: " ), 0, 0, 1, 1 );
+    ugrid->addWidget( x_quantity_label, 1, 0, 1, 1 );
+    ugrid->addWidget( new QLabel( "x spec. label: " ), 2, 0, 1, 1 );
+    ugrid->addWidget( x_units_label, 3, 0, 1, 1 );
+    ugrid->addWidget( new QLabel( "y spec. label: " ), 4, 0, 1, 1 );
+    ugrid->addWidget( y_spec_label, 5, 0, 1, 1 );
 
     axes_spec_labels->setLayout( ugrid );
   }
@@ -820,11 +886,11 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
       auto dir = QDir( current_directory_ );
 
-      QString fileName
-        = QFileDialog::getSaveFileName( nullptr,
-                                        tr( "Save plot" ),
-                                        dir.absoluteFilePath( defaultFileName ),
-                                        tr( "PNG Files (*.png);; All Files (*.*)" ) );
+      QString fileName = QFileDialog::getSaveFileName(
+        nullptr,
+        tr( "Save plot" ),
+        dir.absoluteFilePath( defaultFileName ),
+        tr( "PNG Files (*.png);; PDF Files (*.pdf);;All Files (*.*)" ) );
 
       if ( fileName.isEmpty( ) )
         return;
@@ -850,6 +916,7 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     grid1->setMargin( 2 );
 
     grid1->addWidget( font_size_spinbox, 0, 0 );
+    grid1->addWidget( legend_columns_spinbox, 0, 1 );
     grid1->addWidget( axes_line_width_spinbox, 1, 0 );
     grid1->addWidget( grid_line_width_spinbox, 1, 1 );
     grid1->addWidget( marker_size_spinbox, 2, 0 );
@@ -922,17 +989,25 @@ void mainWindow::new_file( )
   plot->replot( );
 }
 
-void mainWindow::fit( )
+std::vector< test_data_t > mainWindow::pull_tests_list( )
+{
+  auto& tests = tests_list->tests( );
+
+  std::vector< test_data_t > tests_list;
+  for ( const auto& test : tests )
+  {
+    tests_list.push_back( test.data );
+    Rs.insert( test.data.R );
+  }
+  return tests_list;
+}
+
+void mainWindow::fit( bool individually )
 {
   auto& tests = tests_list->tests( );
 
   Rs.clear( );
-  std::vector< test_data_t > tests_to_fit;
-  for ( const auto& test : tests )
-  {
-    tests_to_fit.push_back( test.data );
-    Rs.insert( test.data.R );
-  }
+  auto tests_to_fit = pull_tests_list( );
 
   for ( auto g : computed_graphs )
   {
@@ -941,47 +1016,83 @@ void mainWindow::fit( )
 
   computed_graphs.clear( );
 
-  auto iline = 0;
-  for ( double R : Rs )
-  {
-    auto* g = plot->addGraph( );
-    computed_graphs.push_back( g );
-    g->setName( QString( "Computed R = %1" ).arg( R ) );
-    auto pen = g->pen( );
-
-    const auto& lt = standardLineTypes[ iline++ ];
-
-    pen.setWidthF( 2.0f );
-    pen.setColor( lt.color );
-    pen.setStyle( lt.ps );
-    g->setPen( pen );
-
-    if ( iline == standardLineTypes.size( ) )
-    {
-      iline = 0;
-    }
-  }
-
   if ( lower_bounds_graph != nullptr )
   {
     plot->removeGraph( lower_bounds_graph );
     lower_bounds_graph = nullptr;
   }
-  // Lower and upper fit bounds
-  lower_bounds_graph = plot->addGraph( );
-  lower_bounds_graph->setName( "Lower Opt. Bound" );
-  lower_bounds_graph->setPen( QPen( Qt::gray ) );
-  lower_bounds_graph->setBrush( QBrush( QColor( 0, 0, 255, 20 ) ) );
 
   if ( upper_bounds_graph != nullptr )
   {
     plot->removeGraph( upper_bounds_graph );
     upper_bounds_graph = nullptr;
   }
-  upper_bounds_graph = plot->addGraph( );
-  upper_bounds_graph->setName( "Upper Opt. Bound" );
-  upper_bounds_graph->setPen( QPen( Qt::gray ) );
-  lower_bounds_graph->setChannelFillGraph( upper_bounds_graph );
+
+  auto iline = 0;
+  if ( individually )
+  {
+    computed_.resize( tests.size( ) );
+    for ( const auto& test : tests )
+    {
+      auto* g = plot->addGraph( );
+      computed_graphs.push_back( g );
+      g->setName( QString( "%1 - computed" ).arg( test.name( ) ) );
+      auto pen = g->pen( );
+
+      const auto& lt = standardLineTypes[ iline++ ];
+
+      pen.setWidthF( 3.0f );
+      pen.setColor( test.marker.color( ) );
+      pen.setStyle( lt.ps );
+      g->setPen( pen );
+
+      if ( iline == standardLineTypes.size( ) )
+      {
+        iline = 0;
+      }
+    }
+    compute_individually_action->setIcon( QIcon( "://assets/icons/process_stop.png" ) );
+    compute_individually_action->setText( tr( "Stop" ) );
+    compute_action->setEnabled( false );
+  }
+  else
+  {
+    computed_.resize( 1 );
+    for ( double R : Rs )
+    {
+      auto* g = plot->addGraph( );
+      computed_graphs.push_back( g );
+      g->setName( QString( "Computed R = %1" ).arg( R ) );
+      auto pen = g->pen( );
+
+      const auto& lt = standardLineTypes[ iline++ ];
+
+      pen.setWidthF( 2.0f );
+      pen.setColor( lt.color );
+      pen.setStyle( lt.ps );
+      g->setPen( pen );
+
+      if ( iline == standardLineTypes.size( ) )
+      {
+        iline = 0;
+      }
+    }
+
+    // Lower and upper fit bounds
+    lower_bounds_graph = plot->addGraph( );
+    lower_bounds_graph->setName( "Lower Opt. Bound" );
+    lower_bounds_graph->setPen( QPen( Qt::gray ) );
+    lower_bounds_graph->setBrush( QBrush( QColor( 0, 0, 255, 20 ) ) );
+
+    upper_bounds_graph = plot->addGraph( );
+    upper_bounds_graph->setName( "Upper Opt. Bound" );
+    upper_bounds_graph->setPen( QPen( Qt::gray ) );
+    lower_bounds_graph->setChannelFillGraph( upper_bounds_graph );
+
+    compute_action->setIcon( QIcon( "://assets/icons/process_stop.png" ) );
+    compute_action->setText( tr( "Stop" ) );
+    compute_individually_action->setEnabled( false );
+  }
 
   auto params_low = hs_parameters_t { D_min->text( ).toDouble( ),
                                       p_min->text( ).toDouble( ),
@@ -1005,9 +1116,11 @@ void mainWindow::fit( )
   open_file_action->setEnabled( false );
   save_file_action->setEnabled( false );
   to_excel_action->setEnabled( true );
-  compute_action->setIcon( QIcon( "://assets/icons/process_stop.png" ) );
-  compute_action->setText( tr( "Stop" ) );
 
+  auto autoRange = Hartman_Schijve_autoRange { DeltaK_thr_min_auto->isChecked( ),
+                                               DeltaK_thr_max_auto->isChecked( ),
+                                               A_min_auto->isChecked( ),
+                                               A_max_auto->isChecked( ) };
   QMetaObject::invokeMethod( worker,
                              "run",
                              Q_ARG( hs_parameters_t, params_low ),
@@ -1015,21 +1128,21 @@ void mainWindow::fit( )
                              Q_ARG( int, subdivisions->text( ).toInt( ) ),
                              Q_ARG( double, amortization->text( ).toDouble( ) ),
                              Q_ARG( bool, use_geometric ),
-                             Q_ARG( std::vector< test_data_t >, tests_to_fit ) );
+                             Q_ARG( std::vector< test_data_t >, tests_to_fit ),
+                             Q_ARG( Hartman_Schijve_autoRange, autoRange ),
+                             Q_ARG( bool, individually ) );
 }
 
 void mainWindow::handleResults( hs_parameters_t params,
                                 hs_parameters_t params_lower,
                                 hs_parameters_t params_upper )
 {
-  computed_ = params;
+  if ( computed_.size( ) != 1 )
+  {
+    throw std::logic_error( "Illegal size of computed vector." );
+  }
 
-  results_table_->set_D( params.D );
-  results_table_->set_p( params.p );
-  results_table_->set_DeltaK_thr( params.DeltaK_thr );
-  results_table_->set_A( params.A );
-
-  results_table_->set_visible( true );
+  computed_[ 0 ] = params;
 
   auto generate_hs_curve = []( const auto& params, const auto& R ) {
     auto DeltaK_max = cg::Hartman_Schijve::calc_K_max( params, R );
@@ -1068,7 +1181,16 @@ void mainWindow::handleResults( hs_parameters_t params,
         ys.push_back( double( y ) );
       }
 
-      computed_graphs[ c++ ]->setData( xs, ys, true );
+      computed_graphs[ c ]->setData( xs, ys, true );
+
+      computed_graphs[ c ]->setName( QString( "Computed, R=%1, D=%2, p=%3, %4ₜₕᵣ=%5, A=%6" )
+                                       .arg( double( R ), 0, 'g', 2 )
+                                       .arg( double( params.D ), 0, 'g', 3 )
+                                       .arg( double( params.p ), 0, 'g', 3 )
+                                       .arg( x_quantity_label->text( ) )
+                                       .arg( double( params.DeltaK_thr ), 0, 'g', 3 )
+                                       .arg( double( params.A ), 0, 'g', 3 ) );
+      c++;
     }
   }
 
@@ -1100,6 +1222,98 @@ void mainWindow::handleResults( hs_parameters_t params,
   plot->replot( );
 }
 
+void mainWindow::handleIndividualResults( hs_parameters_t params,
+                                          hs_parameters_t /*params_lower*/,
+                                          hs_parameters_t /*params_upper*/,
+                                          int id )
+{
+  if ( computed_.size( ) != std::size_t( tests_list->tests( ).size( ) ) )
+  {
+    throw std::logic_error( "Illegal size of computed vector." );
+  }
+
+  computed_[ id ] = params;
+
+  const auto& test = tests_list->tests( )[ id ];
+
+  auto dkmin = std::numeric_limits< real_t >::max( );
+  auto dkmax = std::numeric_limits< real_t >::min( );
+
+  for ( auto d : test.data.points )
+  {
+    dkmin = std::min( dkmin, real_t( d.DeltaK ) );
+    dkmax = std::max( dkmax, real_t( d.DeltaK ) );
+  }
+
+  auto DeltaK_min = std::max( dkmin, params.DeltaK_thr * ( 1.0 + 1e-6 ) );
+  auto DeltaK_max = dkmax;
+
+  auto generate_hs_curve = [ DeltaK_min, DeltaK_max ]( const auto& params, const auto& R ) {
+    auto DKs = generate_sequence_log10( DeltaK_min, // From
+                                        DeltaK_max, // To
+                                        240         // Number of points
+    );
+
+    auto dadNs = cg::Hartman_Schijve::evaluate( params, R, DKs );
+
+    return std::make_tuple( DKs, dadNs );
+  };
+
+  real_t R = tests_list->tests( )[ id ].data.R;
+
+  {
+    auto [ DKs, dadNs ] = generate_hs_curve( params, R );
+
+    QVector< double > xs;
+    for ( auto x : DKs )
+    {
+      xs.push_back( double( x ) );
+    }
+
+    QVector< double > ys;
+    for ( auto y : dadNs )
+    {
+      ys.push_back( double( y ) );
+    }
+
+    computed_graphs[ id ]->setData( xs, ys, true );
+    computed_graphs[ id ]->setName( QString( "%1, D=%2, p=%3, %4ₜₕᵣ=%5, A=%6" )
+                                      .arg( test.name( ) )
+                                      .arg( double( params.D ), 0, 'g', 3 )
+                                      .arg( double( params.p ), 0, 'g', 3 )
+                                      .arg( x_quantity_label->text( ) )
+                                      .arg( double( params.DeltaK_thr ), 0, 'g', 3 )
+                                      .arg( double( params.A ), 0, 'g', 3 ) );
+  }
+
+  //  // TODO: replacements to correct for the virtual abberations
+  //  params_lower.D = params.D;
+  //  params_lower.p = params.p;
+  //  params_upper.D = params.D;
+  //  params_upper.p = params.p;
+
+  //  auto [ DKs1, dadNs1 ] = generate_hs_curve( params_lower, R );
+  //  auto [ DKs2, dadNs2 ] = generate_hs_curve( params_upper, R );
+
+  //  if ( std::isnan( double( dadNs2[ 0 ] ) ) )
+  //  {
+  //    dadNs2[ 0 ] = 0;
+  //  }
+
+  //  DKs2.insert( DKs2.begin( ), DKs1[ 0 ] ); // So we can force QCustomplot to fill the area.
+  //  dadNs2.insert( dadNs2.begin( ), dadNs1[ 0 ] );
+
+  //  DKs1.push_back( *DKs2.rbegin( ) );
+  //  dadNs1.push_back( *dadNs2.rbegin( ) );
+
+  //  this->setLow( DKs1, dadNs1 );
+  //  this->setHigh( DKs2, dadNs2 );
+
+  rescale_plot( );
+
+  plot->replot( );
+}
+
 void mainWindow::handle_fitting_finished( )
 {
   new_file_action->setEnabled( true );
@@ -1109,14 +1323,19 @@ void mainWindow::handle_fitting_finished( )
 
   compute_action->setIcon( QIcon( "://assets/icons/process.png" ) );
   compute_action->setText( tr( "Compute" ) );
+  compute_action->setEnabled( true );
+
+  compute_individually_action->setIcon( QIcon( "://assets/icons/process.png" ) );
+  compute_individually_action->setText( tr( "Compute Individually" ) );
+  compute_individually_action->setEnabled( true );
 
   progressBar->hide( );
 
-  plot->removeGraph( lower_bounds_graph );
-  lower_bounds_graph = nullptr;
+  // plot->removeGraph( lower_bounds_graph );
+  //  lower_bounds_graph = nullptr;
 
-  plot->removeGraph( upper_bounds_graph );
-  upper_bounds_graph = nullptr;
+  // plot->removeGraph( upper_bounds_graph );
+  // upper_bounds_graph = nullptr;
 
   rescale_plot( );
   plot->replot( );
@@ -1194,10 +1413,10 @@ void mainWindow::handleProgressReport( int i, int total )
   progressBar->setRange( 0, total - 1 );
   progressBar->setValue( i );
 
-  if ( i == total - 1 )
-  {
-    handle_fitting_finished( );
-  }
+  //  if ( i == total - 1 )
+  //  {
+  //    handle_fitting_finished( );
+  //  }
 }
 
 void mainWindow::remove_test( int index )
@@ -1258,16 +1477,26 @@ void mainWindow::change_font_size( double new_size )
     plot->legend->setFont( font );
   }
 
-  {
-    auto font = results_table_->font( );
-    font.setPointSizeF( new_size );
-    results_table_->set_font( font );
-  }
+  //  {
+  //    auto font = results_table_->font( );
+  //    font.setPointSizeF( new_size );
+  //    results_table_->set_font( font );
+  //  }
 
   auto font = plot->font( );
   font.setPointSizeF( new_size );
   plot->setFont( font );
   plot->xAxis->setLabelFont( font );
+
+  plot->replot( );
+}
+
+void mainWindow::change_legend_columns( int columns )
+{
+  plot->legend->setWrap( columns );
+  plot->legend->setRowSpacing( 0 );
+  plot->legend->setColumnSpacing( 4 );
+  plot->legend->setFillOrder( QCPLayoutGrid::FillOrder::foColumnsFirst, true );
 
   plot->replot( );
 }
@@ -1361,9 +1590,10 @@ void mainWindow::change_marker_line_width( double new_width )
   plot->replot( );
 }
 
-void mainWindow::change_x_spec_label( QString spec )
+void mainWindow::change_x_spec_label( )
 {
-  plot->xAxis->setLabel( QString( spec ) );
+  plot->xAxis->setLabel(
+    QString( "%1 %2" ).arg( x_quantity_label->text( ) ).arg( x_units_label->text( ) ) );
   plot->replot( );
 }
 
@@ -1375,11 +1605,17 @@ void mainWindow::change_y_spec_label( QString spec )
 
 void mainWindow::save_figure( QString filename, int width_pixels )
 {
-  auto size = plot->size( );
 
-  auto scale = double( width_pixels ) / size.width( );
-
-  plot->savePng( filename, size.width( ), size.height( ), scale );
+  if ( filename.right( 3 ).toLower( ) == "pdf" )
+  {
+    plot->savePdf( filename );
+  }
+  else
+  {
+    auto size  = plot->size( );
+    auto scale = double( width_pixels ) / size.width( );
+    plot->savePng( filename, size.width( ), size.height( ), scale );
+  }
 }
 
 void mainWindow::update_test( int index )
@@ -1565,7 +1801,7 @@ void mainWindow::rescale_plot( )
 
 double mainWindow::tests_min_DeltaK_thr( )
 {
-  double max_val = 1000.0;
+  double max_val = 100000.0;
 
   auto& tests = tests_list->tests( );
 
@@ -1580,9 +1816,43 @@ double mainWindow::tests_min_DeltaK_thr( )
   return max_val;
 }
 
+double mainWindow::inividual_test_min_DeltaK_thr( std::size_t id )
+{
+  double max_val = 100000.0;
+
+  auto& tests = tests_list->tests( );
+
+  const auto& test = tests[ id ];
+  {
+    for ( const auto& data_point : test.data.points )
+    {
+      max_val = std::min( data_point.DeltaK, max_val );
+    }
+  }
+
+  return max_val;
+}
+
+double mainWindow::inividual_test_max_A( int id )
+{
+  double min_val = 0.00001;
+
+  auto& tests = tests_list->tests( );
+
+  const auto& test = tests[ id ];
+  {
+    for ( const auto& data_point : test.data.points )
+    {
+      min_val = std::max( data_point.DeltaK / ( 1.0 - test.data.R ), min_val );
+    }
+  }
+
+  return min_val;
+}
+
 double mainWindow::tests_max_A( )
 {
-  double min_val = 3.0;
+  double min_val = 0.00001;
 
   auto& tests = tests_list->tests( );
 
