@@ -20,7 +20,6 @@ decorated_double_spinbox::decorated_double_spinbox( const QString& name,
 
   grid->setContentsMargins( 2, 2, 2, 2 );
   grid->setSpacing( 2 );
-  grid->setMargin( 2 );
 
   int r = -1;
   {
@@ -81,7 +80,6 @@ decorated_int_spinbox::decorated_int_spinbox( const QString& name,
 
   grid->setContentsMargins( 2, 2, 2, 2 );
   grid->setSpacing( 2 );
-  grid->setMargin( 2 );
 
   int r = -1;
   {

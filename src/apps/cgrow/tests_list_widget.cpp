@@ -40,7 +40,6 @@ tests_list_widget::tests_list_widget( QWidget* parent ) : QWidget( parent )
   grid->addWidget( remove, 1, 2, 1, 1 );
 
   grid->setContentsMargins( 2, 2, 2, 2 );
-  grid->setMargin( 2 );
 
   this->setLayout( grid );
 

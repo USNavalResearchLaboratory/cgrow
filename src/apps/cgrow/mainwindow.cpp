@@ -194,7 +194,6 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     auto hbox = new QHBoxLayout;
     hbox->addWidget( tests_list );
     hbox->setContentsMargins( 2, 2, 2, 2 );
-    hbox->setMargin( 2 );
     hbox->setSpacing( 1 );
 
     auto testsListGroupBox = new QGroupBox( );
@@ -913,7 +912,6 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
 
     grid1->setContentsMargins( 2, 2, 2, 2 );
     grid1->setSpacing( 2 );
-    grid1->setMargin( 2 );
 
     grid1->addWidget( font_size_spinbox, 0, 0 );
     grid1->addWidget( legend_columns_spinbox, 0, 1 );
@@ -925,7 +923,6 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     auto vbox = new QVBoxLayout;
     vbox->setContentsMargins( 2, 2, 2, 2 );
     vbox->setSpacing( 2 );
-    vbox->setMargin( 2 );
     vbox->addWidget( new QLabel( tr( "Plot Options" ) ) );
     vbox->addLayout( grid1 );
 
