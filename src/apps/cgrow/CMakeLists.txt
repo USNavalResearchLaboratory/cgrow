@@ -3,25 +3,12 @@ set(CMAKE_AUTORCC ON)
 
 project( cgrow )
 
-find_package( Qt5
-  COMPONENTS
-  Widgets
-  PrintSupport
-  REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets PrintSupport REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets PrintSupport REQUIRED)
 
-qt5_add_resources( resources ${CMAKE_CURRENT_SOURCE_DIR}/icons.qrc ${CMAKE_CURRENT_SOURCE_DIR}/images.qrc)
+qt_add_resources( resources ${CMAKE_CURRENT_SOURCE_DIR}/icons.qrc ${CMAKE_CURRENT_SOURCE_DIR}/images.qrc)
 
-if( WIN32 )
-  set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/appicon.rc")
-endif()
-
-find_package( Threads REQUIRED )
-
-if( WIN32 )
-  set( NOCONSOLEWIN WIN32 )
-endif()
-
-add_executable( cgrow
+set (CGROW_EXECUTABLE_ITEMS
   ${NOCONSOLEWIN}
   ${resources}
   ${APP_ICON_RESOURCE_WINDOWS}
@@ -45,12 +32,27 @@ add_executable( cgrow
   qcp_results_table.hpp
   qcp_results_table.cpp
   fitting_worker.hpp
-  fitting_worker.cpp
-  )
+  fitting_worker.cpp )
+
+if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
+    qt_add_executable(cgrow ${CGROW_EXECUTABLE_ITEMS} )
+else()
+  add_executable(cgrow ${CGROW_EXECUTABLE_ITEMS} )
+endif()
+if( WIN32 )
+  set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/appicon.rc")
+endif()
+
+find_package( Threads REQUIRED )
+
+if( WIN32 )
+  set( NOCONSOLEWIN WIN32 )
+endif()
 
 target_link_libraries( cgrow
-  Qt5::Widgets
-  Qt5::PrintSupport
+  PRIVATE
+  Qt${QT_VERSION_MAJOR}::Widgets
+  Qt${QT_VERSION_MAJOR}::PrintSupport
   libcgrow
   nlopt
   Threads::Threads

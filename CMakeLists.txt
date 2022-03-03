@@ -8,7 +8,7 @@ include( FetchContent )
 
 FetchContent_Declare(
   cxxplot
-  GIT_REPOSITORY "git@github.com:USNavalResearchLaboratory/cxxplot.git"
+  GIT_REPOSITORY "https://github.com/USNavalResearchLaboratory/cxxplot.git"
   GIT_TAG main
   )
 
