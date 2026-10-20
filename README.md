@@ -64,10 +64,6 @@ If CGROW contributes to published work, cite the method paper:
   doi     = {10.1016/j.ijfatigue.2022.107490}
 }
 ```
-
-The [license](license.txt) also requires published research using the software to acknowledge the NRL
-CGROW computer package and its developers at the U.S. Naval Research Laboratory.
-
 ## License intent
 CGROW is the work of federal employees and the relevant source code is in the public domain. Please read the [license](license.txt) to ensure you can satisfy the authorization to use and distribute requirements.
 
