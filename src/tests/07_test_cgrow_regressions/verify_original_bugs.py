@@ -11,14 +11,25 @@ ROOT = Path(__file__).resolve().parents[3]
 # Find a historical revision that actually contains the predecessor signatures.
 # Using HEAD^ is unstable: after this change is committed, HEAD^ is the current
 # partially-fixed baseline rather than the genuinely buggy implementation.
-history = subprocess.check_output(
-    ["git", "rev-list", "--all", "--", "src/lib/cgrow.hpp"], cwd=ROOT
-).decode("utf-8").splitlines()
+try:
+    history = subprocess.check_output(
+        ["git", "rev-list", "--all", "--", "src/lib/cgrow.hpp"], cwd=ROOT,
+        stderr=subprocess.DEVNULL,
+    ).decode("utf-8").splitlines()
+except (FileNotFoundError, subprocess.CalledProcessError):
+    print("Git history is unavailable; skipping predecessor checks")
+    sys.exit(0)
+
 old = None
 for revision in history:
-    candidate = subprocess.check_output(
-        ["git", "show", f"{revision}:src/lib/cgrow.hpp"], cwd=ROOT
-    ).decode("utf-8")
+    try:
+        candidate = subprocess.check_output(
+            ["git", "show", f"{revision}:src/lib/cgrow.hpp"],
+            cwd=ROOT,
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8")
+    except subprocess.CalledProcessError:
+        continue
     if all(
         signature in candidate
         for signature in (

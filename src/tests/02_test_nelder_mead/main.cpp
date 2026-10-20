@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <nlopt.hpp>
 
+#include <stdexcept>
 #include <vector>
 
 #define SCALE 1
@@ -57,6 +58,21 @@ int main()
     if ( multi_index_count != 16 )
     {
         return 2;
+    }
+
+    bool rejected_empty_multi_index = false;
+    try
+    {
+        nelder_mead::multi_index_t empty_index( {} );
+        (void)empty_index;
+    }
+    catch ( const std::invalid_argument& )
+    {
+        rejected_empty_multi_index = true;
+    }
+    if ( !rejected_empty_multi_index )
+    {
+        return 4;
     }
 
     const auto grid_result = nelder_mead::search< double >(

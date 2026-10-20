@@ -440,9 +440,11 @@ struct multi_index_t
         sizes_( sizes ),
         location_( sizes.size() )
     {
-        if ( std::any_of( sizes_.begin( ), sizes_.end( ), []( std::size_t size ) { return size == 0; } ) )
+        if ( sizes_.empty( )
+             || std::any_of(
+               sizes_.begin( ), sizes_.end( ), []( std::size_t size ) { return size == 0; } ) )
         {
-            throw std::invalid_argument( "Multi-index dimensions must be non-zero." );
+            throw std::invalid_argument( "Multi-index dimensions must be non-empty and non-zero." );
         }
     }
 

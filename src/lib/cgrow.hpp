@@ -436,7 +436,6 @@ namespace Hartman_Schijve
 inline constexpr std::size_t HS_MAX_ITERS = 60;
 inline std::atomic<std::size_t> totalevals{ 0 };
 inline std::mutex stdoutmutex;
-inline std::atomic_bool default_stop_requested{ false };
 
 namespace constants
 {
@@ -787,18 +786,18 @@ struct common_among_tests
 };
 
 template< class T, class Container_t >
-parameters< T > fit(
+parameters< T > fit_impl(
   parameters< T >     search_space_min,
   parameters< T >     search_space_max,
   const Container_t&   test_set,
-  const std::size_t subdivisions = constants::default_subdivisions,
-  const double& amortization = constants::default_amortization,
-  std::size_t         iterations    = 0,
-  bool                use_geometric = false,
-  callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
-  progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
-  std::atomic_bool& stop_requested                                 = default_stop_requested,
-  std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
+  const std::size_t   subdivisions,
+  const double&       amortization,
+  std::size_t         iterations,
+  bool                use_geometric,
+  callback_t< T >     callback,
+  progress_callback_t progress_callback,
+  std::atomic_bool&   stop_requested,
+  std::function< void( parameters< T > ) > per_thread_callback )
 {
   using params_t = parameters< T >;
 
@@ -1092,6 +1091,65 @@ parameters< T > fit(
   return params_at_min;
 }
 
+// Caller-owned stop flags support cancellation and are never shared between fits.
+template< class T, class Container_t >
+parameters< T > fit(
+  parameters< T >     search_space_min,
+  parameters< T >     search_space_max,
+  const Container_t&   test_set,
+  const std::size_t   subdivisions,
+  const double&       amortization,
+  std::size_t         iterations,
+  bool                use_geometric,
+  callback_t< T >     callback,
+  progress_callback_t progress_callback,
+  std::atomic_bool&   stop_requested,
+  std::function< void( parameters< T > ) > per_thread_callback
+    = []( parameters< T > ) {} )
+{
+  return fit_impl( search_space_min,
+                   search_space_max,
+                   test_set,
+                   subdivisions,
+                   amortization,
+                   iterations,
+                   use_geometric,
+                   std::move( callback ),
+                   std::move( progress_callback ),
+                   stop_requested,
+                   std::move( per_thread_callback ) );
+}
+
+// Fits without an explicit stop flag receive an independent local flag. This
+// avoids cross-cancelling simultaneous calls through shared global state.
+template< class T, class Container_t >
+parameters< T > fit(
+  parameters< T >     search_space_min,
+  parameters< T >     search_space_max,
+  const Container_t&   test_set,
+  const std::size_t   subdivisions = constants::default_subdivisions,
+  const double&       amortization = constants::default_amortization,
+  std::size_t         iterations   = 0,
+  bool                use_geometric = false,
+  callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
+  progress_callback_t progress_callback = []( std::size_t, std::size_t ) {},
+  std::function< void( parameters< T > ) > per_thread_callback
+    = []( parameters< T > ) {} )
+{
+  std::atomic_bool stop_requested{ false };
+  return fit_impl( search_space_min,
+                   search_space_max,
+                   test_set,
+                   subdivisions,
+                   amortization,
+                   iterations,
+                   use_geometric,
+                   std::move( callback ),
+                   std::move( progress_callback ),
+                   stop_requested,
+                   std::move( per_thread_callback ) );
+}
+
 // template< class T, class Container_t >
 // parameters< T > fit3(
 //  const common_among_tests& common,
@@ -1350,11 +1408,12 @@ parameters< T > fit(
 template< class T, class Container_t >
 parameters< T > fit(
   const Container_t&  test_set,
-  bool                use_geometric = false,
-  callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
-  progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
-  std::atomic_bool& stop_requested                                  = default_stop_requested,
-  std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
+  bool                use_geometric,
+  callback_t< T >     callback,
+  progress_callback_t progress_callback,
+  std::atomic_bool&   stop_requested,
+  std::function< void( parameters< T > ) > per_thread_callback
+    = []( parameters< T > ) {} )
 
 {
   T Amin      = std::numeric_limits< T >::lowest( );
@@ -1403,6 +1462,24 @@ parameters< T > fit(
               progress_callback,
               stop_requested,
               per_thread_callback );
+}
+
+template< class T, class Container_t >
+parameters< T > fit(
+  const Container_t&  test_set,
+  bool                use_geometric = false,
+  callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
+  progress_callback_t progress_callback = []( std::size_t, std::size_t ) {},
+  std::function< void( parameters< T > ) > per_thread_callback
+    = []( parameters< T > ) {} )
+{
+  std::atomic_bool stop_requested{ false };
+  return fit( test_set,
+              use_geometric,
+              std::move( callback ),
+              std::move( progress_callback ),
+              stop_requested,
+              std::move( per_thread_callback ) );
 }
 
 // Keep compatibility with callers that pass a temporary or an immutable stop

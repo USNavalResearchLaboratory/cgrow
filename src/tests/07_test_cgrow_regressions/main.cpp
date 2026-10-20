@@ -228,7 +228,8 @@ int main()
   using HS = crack_growth::Hartman_Schijve::parameters< T >;
   const HS low{ 1.0e-12, 1.5, 0.01, 20.0 };
   const HS high{ 1.0e-8, 3.0, 10.0, 300.0 };
-  std::atomic_bool fit_stop{ false };
+  // The no-stop overload must create independent cancellation state instead
+  // of sharing a mutable process-wide default flag.
   const auto fitted = crack_growth::Hartman_Schijve::fit(
     low,
     high,
@@ -238,8 +239,7 @@ int main()
     2,
     false,
     crack_growth::Hartman_Schijve::callback_t< T >( []( HS, HS, HS ) {} ),
-    crack_growth::Hartman_Schijve::progress_callback_t( []( std::size_t, std::size_t ) {} ),
-    fit_stop );
+    crack_growth::Hartman_Schijve::progress_callback_t( []( std::size_t, std::size_t ) {} ) );
   const auto benchmark_scale = crack_growth::computeAxesScale< T >( benchmark_set );
   const auto residual = crack_growth::Hartman_Schijve::objective_function(
     fitted, false, benchmark_set, benchmark_scale );
