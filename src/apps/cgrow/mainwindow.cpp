@@ -16,6 +16,13 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QStandardPaths>
+#include <QtGlobal>
+#if QT_VERSION >= QT_VERSION_CHECK( 6, 0, 0 )
+#  include <QtSvgWidgets/QSvgWidget>
+#else
+#  include <QSvgWidget>
+#endif
+#include <QSvgRenderer>
 #include <QToolBar>
 #include <QValidator>
 
@@ -217,20 +224,12 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
     int  q     = -1;
 
     {
-      QPixmap eqnPic( "://hseqn" );
-      auto    eqnLabel = new QLabel;
-      eqnLabel->setPixmap(
-        eqnPic.scaled( 240, 70, Qt::KeepAspectRatio, Qt::SmoothTransformation ) );
-      eqnLabel->setAlignment( Qt::AlignHCenter | Qt::AlignVCenter );
-      fgrid->addWidget( eqnLabel, ++q, 0, 1, 5 );
-
-      auto palette = eqnLabel->palette( );
-      palette.setColor( eqnLabel->backgroundRole( ), Qt::white );
-      eqnLabel->setAutoFillBackground( true );
-      eqnLabel->setMargin( 5 );
-      eqnLabel->setPalette( palette );
-
-      eqnLabel->setStyleSheet( "border: 1px solid gray; background-color: white;" );
+      auto eqnWidget = new QSvgWidget( "://hseqn" );
+      eqnWidget->setFixedSize( 280, 145 );
+      eqnWidget->setContentsMargins( 12, 12, 12, 12 );
+      eqnWidget->renderer( )->setAspectRatioMode( Qt::KeepAspectRatio );
+      eqnWidget->setStyleSheet( "border: 1px solid gray; background-color: white;" );
+      fgrid->addWidget( eqnWidget, ++q, 0, 1, 5 );
     }
 
     fgrid->addWidget( new QLabel( tr( "Quantity" ) ), ++q, 0, 1, 1 );

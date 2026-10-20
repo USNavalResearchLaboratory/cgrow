@@ -1,3 +1,7 @@
 CMakeLists.txt.user*
 build
 *.xlsx
+
+# Local planning and agent instructions
+/sop/
+/AGENTS.md

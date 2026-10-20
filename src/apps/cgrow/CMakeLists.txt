@@ -3,8 +3,11 @@ set(CMAKE_AUTORCC ON)
 
 project( cgrow )
 
-find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets PrintSupport REQUIRED)
-find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets PrintSupport REQUIRED)
+find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets PrintSupport Svg REQUIRED)
+find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets PrintSupport Svg REQUIRED)
+if(QT_VERSION_MAJOR GREATER_EQUAL 6)
+  find_package(Qt${QT_VERSION_MAJOR} COMPONENTS SvgWidgets REQUIRED)
+endif()
 
 qt_add_resources( resources ${CMAKE_CURRENT_SOURCE_DIR}/icons.qrc ${CMAKE_CURRENT_SOURCE_DIR}/images.qrc)
 
@@ -53,10 +56,15 @@ target_link_libraries( cgrow
   PRIVATE
   Qt${QT_VERSION_MAJOR}::Widgets
   Qt${QT_VERSION_MAJOR}::PrintSupport
+  Qt${QT_VERSION_MAJOR}::Svg
   libcgrow
   nlopt
   Threads::Threads
   )
+
+if(QT_VERSION_MAJOR GREATER_EQUAL 6)
+  target_link_libraries(cgrow PRIVATE Qt${QT_VERSION_MAJOR}::SvgWidgets)
+endif()
 
 #include( cmake/windeployqt.cmake )
 

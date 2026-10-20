@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/">
-        <file alias="hseqn">assets/hseqn.png</file>
+        <file alias="hseqn">assets/hseqn.svg</file>
     </qresource>
 </RCC>

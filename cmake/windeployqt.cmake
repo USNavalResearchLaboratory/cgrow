@@ -15,11 +15,21 @@ function(WinDeployQt)
     if(NOT _deploy_TARGET)
         message(FATAL_ERROR "A TARGET must be specified")
     endif()
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    if(CMAKE_CONFIGURATION_TYPES)
+        # Visual Studio and other multi-config generators leave
+        # CMAKE_BUILD_TYPE empty. Defer the deployment mode and output
+        # directory to build time so each configuration gets matching Qt DLLs.
+        list(APPEND _ARGS
+            "$<$<CONFIG:Debug>:--debug>"
+            "$<$<CONFIG:RelWithDebInfo>:--release-with-debug-info>"
+            "$<$<CONFIG:Release>:--release>"
+            "$<$<CONFIG:MinSizeRel>:--release>"
+            )
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
         list(APPEND _ARGS --debug)
     elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
         list(APPEND _ARGS --release-with-debug-info)
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
         list(APPEND _ARGS --release)
     endif()
     if(_deploy_COMPILER_RUNTIME)
@@ -52,7 +62,8 @@ function(WinDeployQt)
         message(STATUS "not set, the VC++ redistributable installer will NOT be bundled")
     endif()
 
-    add_custom_target(windeployqt ALL ${_deploy_PROGRAM} --dir ${PROJECT_BINARY_DIR}/bin ${_ARGS}
+    add_custom_target(windeployqt ALL ${_deploy_PROGRAM}
+        --dir "$<TARGET_FILE_DIR:${_deploy_TARGET}>" ${_ARGS}
         $<TARGET_FILE:${_deploy_TARGET}>
         DEPENDS ${_deploy_TARGET}
         COMMENT "Preparing Qt runtime dependencies")
