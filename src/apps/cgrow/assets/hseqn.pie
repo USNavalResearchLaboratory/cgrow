@@ -1,0 +1,127 @@
+// Radical Pie Equation
+
+D
+{
+	F (i=8) {s{"NewCM10-Book"}}
+	F (i=9) {s{"NewCM10-BookItalic"}}
+	F (i=10) {s{"NewCM10-Bold"}}
+	F (i=11) {s{"NewCM10-BoldItalic"}}
+	F (i=12) {s{"NewCMMath-RadicalPieGreek-Book"}}
+	F (i=13) {s{"NewCMMath-RadicalPieGreek-Bold"}}
+	F (i=14) {s{"NewCMMath-Book"}}
+	F (i=15) {s{"NewCMMath-Bold"}}
+	M (t='uprt') {u8{8,0,1,7}}
+	M (t='ital') {u8{9,0,2,7}}
+	M (t='bold') {u8{10,0,3,7}}
+	M (t='bitl') {u8{11,0,4,7}}
+	M (t='grek') {u8{8,1,7,5}}
+	M (t='itgk') {u8{12,2,7,5}}
+	M (t='bdgk') {u8{10,3,7,5}}
+	M (t='bigk') {u8{13,4,7,5}}
+	M (t='sym1') {u8{14,0,5,7}}
+	M (t='sym2') {u8{14,0,5,7}}
+	M (t='nary') {u8{14,0,1,5}}
+	M (t='gral') {u8{14,0,1,5}}
+	M (t='scpt') {u8{14,6,255,255}}
+	M (t='bdsc') {u8{15,6,255,255}}
+	M (t='frkt') {u8{14,6,255,255}}
+	M (t='bdfk') {u8{15,6,255,255}}
+	M (t='doub') {u8{14,6,255,255}}
+	M (t='sans') {u8{14,6,255,255}}
+	M (t='itsn') {u8{14,6,255,255}}
+	M (t='dbsn') {u8{15,6,255,255}}
+	M (t='bisn') {u8{15,6,255,255}}
+	V (n='fsiz') {f{12.0}}
+}
+Gr
+{
+	Bg {}
+	Fr
+	{
+		Gr (t='numr')
+		{
+			Bg {}
+			Sb {s{"da"}}
+		}
+		Gr (t='dnom')
+		{
+			Bg {}
+			Sb {s{"dN"}}
+		}
+	}
+	Sb (ro='rltn') {s{"="}}
+	Sb {s{"D"}}
+	Br
+	{
+		u32{0x5B,0x5D}
+		Gr (ba='mddl')
+		{
+			Bg {}
+			Fr
+			{
+				Gr (t='numr')
+				{
+					Bg {}
+					Sb (st='grek') {s{"Δ"}}
+					Sb {s{"K"}}
+					Sb (ro='oper') {s{"−"}}
+					Sb (st='grek') {s{"Δ"}}
+					Sb {s{"K"}}
+					Sc
+					{
+						Gr (t='subs')
+						{
+							Bg {}
+							Sb {s{"thr"}}
+						}
+					}
+				}
+				Gr (t='dnom')
+				{
+					Bg {}
+					Rd
+					{
+						Gr
+						{
+							Bg {}
+							Sb (ro='nmbr') {s{"1"}}
+							Sb (ro='oper') {s{"−"}}
+							Fr
+							{
+								Gr (t='numr')
+								{
+									Bg {}
+									Sb (st='grek') {s{"Δ"}}
+									Sb {s{"K"}}
+								}
+								Gr (t='dnom')
+								{
+									Bg {}
+									Sb {s{"A"}}
+									Br
+									{
+										Gr (ba='mddl')
+										{
+											Bg {}
+											Sb (ro='nmbr') {s{"1"}}
+											Sb (ro='oper') {s{"−"}}
+											Sb {s{"R"}}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	Sc
+	{
+		Gr (t='sups')
+		{
+			Bg {}
+			Sb {s{"p"}}
+		}
+	}
+}
