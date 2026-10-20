@@ -120,6 +120,11 @@ T sample_parameter( const T&           min,
                     const std::size_t& m )
 {
 
+  if ( !std::isfinite( min ) || !std::isfinite( max ) || min > max )
+  {
+    throw std::invalid_argument( "Parameter sampling bounds must be finite and ordered." );
+  }
+
   if ( m >= subdivisions )
   {
     throw std::runtime_error(
@@ -165,9 +170,14 @@ bool generate_eval_set( F&&                f,
   {
     throw std::invalid_argument( "The upstream parameter list has the wrong size." );
   }
+  if ( paramID >= num_params )
+  {
+    throw std::out_of_range( "Parameter index is outside the parameter bounds." );
+  }
 
-  auto l = low[ paramID ];
-  auto h = high[ paramID ];
+  const auto l = low[ paramID ];
+  const auto h = high[ paramID ];
+  const auto requested_subdivisions = subdivisions;
 
   if ( detail::almost_equal( l, h, constants::collapsed_range_ulp ) )
   {
@@ -181,7 +191,7 @@ bool generate_eval_set( F&&                f,
     {
       upstreamParams[ paramID ] = cuhyso::sample_parameter( l, h, subdivisions, i );
       generate_eval_set< T >(
-        f, low, high, subdivisions, eval_set, stop_requested, upstreamParams, paramID + 1 );
+        f, low, high, requested_subdivisions, eval_set, stop_requested, upstreamParams, paramID + 1 );
     }
   }
   else
@@ -212,8 +222,6 @@ void minimize(
     constants::minimum_thread_count, std::thread::hardware_concurrency( ) ) )
 {
 
-  stop_requested.store( false, std::memory_order_relaxed );
-
   if ( low.size( ) == 0 || high.size( ) != low.size( ) )
   {
     throw std::invalid_argument( "Parameter bounds must be non-empty and have matching sizes." );
@@ -230,8 +238,10 @@ void minimize(
 
   if ( iterations == 0 )
   {
-    iterations = static_cast< std::size_t >(
-      std::log( T( constants::default_iteration_eval_budget ) ) / std::log( amortization ) );
+    iterations = std::max< std::size_t >(
+      1,
+      static_cast< std::size_t >(
+        std::log( T( constants::default_iteration_eval_budget ) ) / std::log( amortization ) ) );
   }
 
   std::vector< ParamList > eval_set;
@@ -366,6 +376,11 @@ struct test_data_t
 template< typename T, class Container_t >
 T computeAxesScale( const Container_t& test_set )
 {
+  if ( test_set.empty( ) )
+  {
+    throw std::invalid_argument( "At least one test dataset is required." );
+  }
+
   T DKmin = std::numeric_limits< T >::max( );
   T DKmax = T( constants::minimum_positive_value );
 
@@ -374,8 +389,17 @@ T computeAxesScale( const Container_t& test_set )
 
   for ( const auto& test : test_set )
   {
+    if ( test.points.empty( ) || !std::isfinite( test.R ) || test.R < T( -1 ) || test.R >= T( 1 ) )
+    {
+      throw std::invalid_argument( "Each dataset must contain points and a valid R value." );
+    }
     for ( const auto& point : test.points )
     {
+      if ( !std::isfinite( point.DeltaK ) || !std::isfinite( point.dadN )
+           || point.DeltaK <= T( 0 ) || point.dadN <= T( 0 ) )
+      {
+        throw std::invalid_argument( "DeltaK and dadN values must be finite and positive." );
+      }
       DKmin   = std::min( DKmin, point.DeltaK );
       DKmax   = std::max( DKmax, point.DeltaK );
       dadNmin = std::min( dadNmin, point.dadN );
@@ -412,7 +436,7 @@ namespace Hartman_Schijve
 inline constexpr std::size_t HS_MAX_ITERS = 60;
 inline std::atomic<std::size_t> totalevals{ 0 };
 inline std::mutex stdoutmutex;
-inline const std::atomic_bool default_stop_requested{ false };
+inline std::atomic_bool default_stop_requested{ false };
 
 namespace constants
 {
@@ -664,6 +688,14 @@ Model_Distance_t< T > objective_function( const parameters< T >& hs_params,
                                           const Container_t&     test_set,
                                           const T                scale )
 {
+  if ( !std::isfinite( hs_params.D ) || !std::isfinite( hs_params.p )
+       || !std::isfinite( hs_params.DeltaK_thr ) || !std::isfinite( hs_params.A )
+       || hs_params.D <= T( 0 ) || hs_params.p <= T( 0 ) || hs_params.DeltaK_thr <= T( 0 )
+       || hs_params.A <= T( 0 ) || !std::isfinite( scale ) || scale <= T( 0 ) )
+  {
+    return Model_Distance_t( T( constants::invalid_objective_distance ), 0.0 );
+  }
+
   T sum = 0.0;
 
   std::size_t num_rejected_data_points = 0;
@@ -726,6 +758,11 @@ Model_Distance_t< T > objective_function( const parameters< T >& hs_params,
   //    std::cout << "Rejected : " << num_rejected_data_points << std::endl;
   //  }
 
+  if ( num_data_points == 0 )
+  {
+    return Model_Distance_t( T( constants::invalid_objective_distance ), 0.0 );
+  }
+
   double utilization = double( num_utlized_points ) / num_data_points;
 
   if ( num_utlized_points == 0 )
@@ -760,7 +797,7 @@ parameters< T > fit(
   bool                use_geometric = false,
   callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
   progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
-  const std::atomic_bool& stop_requested                        = default_stop_requested,
+  std::atomic_bool& stop_requested                                 = default_stop_requested,
   std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
 {
   using params_t = parameters< T >;
@@ -789,13 +826,39 @@ parameters< T > fit(
 
   using st = std::size_t;
 
+  if ( test_set.empty( ) )
+  {
+    throw std::invalid_argument( "At least one test dataset is required for fitting." );
+  }
+  if ( subdivisions == 0 )
+  {
+    throw std::invalid_argument( "The number of subdivisions must be greater than zero." );
+  }
+  if ( !std::isfinite( amortization ) || amortization <= 1.0 )
+  {
+    throw std::invalid_argument( "Amortization must be finite and greater than one." );
+  }
+  const auto valid_bounds = []( T lower, T upper, bool require_positive ) {
+    return std::isfinite( lower ) && std::isfinite( upper ) && lower <= upper
+           && ( !require_positive || ( lower > T( 0 ) && upper > T( 0 ) ) );
+  };
+  if ( !valid_bounds( search_space_min.D, search_space_max.D, true )
+       || !valid_bounds( search_space_min.p, search_space_max.p, true )
+       || !valid_bounds( search_space_min.DeltaK_thr, search_space_max.DeltaK_thr, true )
+       || !valid_bounds( search_space_min.A, search_space_max.A, true ) )
+  {
+    throw std::invalid_argument( "Fitting parameter bounds are invalid." );
+  }
+
   auto objective_min = std::numeric_limits< T >::max( );
   auto params_at_min = params_t { 0.0, 0.0, 0.0, 0.0 };
 
   if ( iterations == 0 )
   {
-    iterations = static_cast< std::size_t >(
-      std::log( constants::default_iteration_budget ) / std::log( amortization ) );
+    iterations = std::max< std::size_t >(
+      1,
+      static_cast< std::size_t >(
+        std::log( constants::default_iteration_budget ) / std::log( amortization ) ) );
   }
 
   auto subd = subdivisions;
@@ -833,8 +896,10 @@ parameters< T > fit(
   for ( st t = 0; t != iterations && !stop_requested.load( std::memory_order_relaxed ); t++ )
   {
     std::vector< std::thread > threads;
+    std::exception_ptr thread_error;
+    std::mutex         thread_error_mutex;
 
-    auto D_index_span = std::floor( ( subdD ) / num_threads );
+    const st D_index_span = subdD / num_threads;
 
     for ( st tid = 0; tid != num_threads; tid++ )
     {
@@ -853,9 +918,13 @@ parameters< T > fit(
                                         &params_mins,
                                         subdivisions,
                                         &test_set,
-                                        scale ]( ) {
-        auto start  = D_index_span * tid;
-        auto finish = ( tid == num_threads - 1 ) ? subdD : start + D_index_span;
+                                        scale,
+                                        &thread_error,
+                                        &thread_error_mutex ]( ) {
+        try
+        {
+        const st start  = D_index_span * tid;
+        const st finish = ( tid == num_threads - 1 ) ? subdD : start + D_index_span;
 
         for ( auto dj = start; dj != finish
                          && !stop_requested.load( std::memory_order_relaxed ); dj++ )
@@ -937,12 +1006,28 @@ parameters< T > fit(
             }
           }
         }
+        }
+        catch ( ... )
+        {
+          {
+            std::lock_guard< std::mutex > lock( thread_error_mutex );
+            if ( !thread_error )
+            {
+              thread_error = std::current_exception( );
+            }
+          }
+          stop_requested.store( true, std::memory_order_relaxed );
+        }
       } ) );
     }
 
     for ( st tid = 0; tid != num_threads; tid++ )
     {
       threads[ tid ].join( );
+    }
+    if ( thread_error )
+    {
+      std::rethrow_exception( thread_error );
     }
 
     double max_utlization_at_min = 0;
@@ -958,6 +1043,11 @@ parameters< T > fit(
         params_at_min         = params_mins[ tid ];
         max_utlization_at_min = max_utilization_mins[ tid ];
       }
+    }
+
+    if ( max_utlization_at_min <= 0.0 || !std::isfinite( objective_min ) )
+    {
+      throw std::runtime_error( "No valid parameter set could be evaluated for the supplied data." );
     }
 
     for ( st tid = 0; tid != num_threads; tid++ )
@@ -1263,7 +1353,7 @@ parameters< T > fit(
   bool                use_geometric = false,
   callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
   progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
-  const std::atomic_bool& stop_requested                        = default_stop_requested,
+  std::atomic_bool& stop_requested                                  = default_stop_requested,
   std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
 
 {
@@ -1313,6 +1403,28 @@ parameters< T > fit(
               progress_callback,
               stop_requested,
               per_thread_callback );
+}
+
+// Keep compatibility with callers that pass a temporary or an immutable stop
+// flag. Such a flag cannot be observed after the call starts, so use a local
+// mutable copy while the reference overload above preserves live cancellation
+// for normal lvalue atomics.
+template< class T, class Container_t >
+parameters< T > fit(
+  const Container_t&                 test_set,
+  bool                               use_geometric,
+  callback_t< T >                    callback,
+  progress_callback_t                progress_callback,
+  const std::atomic_bool&            stop_requested,
+  std::function< void( parameters< T > ) > per_thread_callback )
+{
+  std::atomic_bool local_stop_requested { stop_requested.load( std::memory_order_relaxed ) };
+  return fit( test_set,
+              use_geometric,
+              std::move( callback ),
+              std::move( progress_callback ),
+              local_stop_requested,
+              std::move( per_thread_callback ) );
 }
 
 } // namespace Hartman_Schijve

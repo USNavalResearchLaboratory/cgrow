@@ -13,6 +13,7 @@
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -29,6 +30,9 @@
 #include <QDebug>
 
 #include <array>
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
 
 namespace cg = crack_growth;
 
@@ -96,6 +100,16 @@ std::vector< T > generate_sequence( T from, T to, std::size_t count )
 {
   std::vector< T > seq;
 
+  if ( count == 0 )
+  {
+    return seq;
+  }
+  if ( count == 1 )
+  {
+    seq.push_back( from );
+    return seq;
+  }
+
   T step = ( to - from ) / ( count - 1 );
 
   for ( std::size_t i = 0; i != count; i++ )
@@ -111,12 +125,30 @@ std::vector< T > generate_sequence_log10( T from, T to, std::size_t count )
 {
   std::vector< T > seq;
 
+  if ( count == 0 )
+  {
+    return seq;
+  }
+  if ( count == 1 )
+  {
+    if ( from <= T( 0 ) || !std::isfinite( from ) )
+    {
+      throw std::invalid_argument( "Logarithmic sequence values must be finite and positive." );
+    }
+    seq.push_back( from );
+    return seq;
+  }
+  if ( from <= T( 0 ) || to <= T( 0 ) || !std::isfinite( from ) || !std::isfinite( to ) )
+  {
+    throw std::invalid_argument( "Logarithmic sequence values must be finite and positive." );
+  }
+
   T froml10 = std::log10( from );
   T step    = ( std::log10( to ) - std::log10( from ) ) / ( count - 1 );
 
   for ( std::size_t i = 0; i != count; i++ )
   {
-    seq.push_back( std::pow( 10.0, froml10 + step * i ) );
+    seq.push_back( std::pow( T( 10 ), froml10 + step * i ) );
   }
 
   return seq;
@@ -188,6 +220,9 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   connect( worker, &fittingWorker::progressReport, this, &mainWindow::handleProgressReport );
 
   connect( worker, &fittingWorker::finished, this, &mainWindow::handle_fitting_finished );
+  connect( worker, &fittingWorker::failed, this, [ this ]( const QString& message ) {
+    QMessageBox::critical( this, tr( "Fitting failed" ), message );
+  } );
 
   workerThread.start( );
 
@@ -941,9 +976,13 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
   }
 
   auto globalCursorPos = QCursor::pos( );
-  auto mouseScreen     = QGuiApplication::screenAt( globalCursorPos );
+  auto mouseScreen = QGuiApplication::screenAt( globalCursorPos );
+  if ( mouseScreen == nullptr )
+  {
+    mouseScreen = QGuiApplication::primaryScreen( );
+  }
 
-  auto        sr = mouseScreen->availableGeometry( );
+  const QRect sr = mouseScreen != nullptr ? mouseScreen->availableGeometry( ) : QRect( 0, 0, 800, 600 );
   const QRect wr( { }, QSize( 800, 600 ).boundedTo( sr.size( ) ) );
 
   this->resize( wr.size( ) );
@@ -954,12 +993,7 @@ mainWindow::~mainWindow( )
 {
   worker->stop( );
   workerThread.quit( );
-  workerThread.wait( 10000 );
-  if ( workerThread.isRunning( ) )
-  {
-    qDebug( ) << "Terminating fitting thread.";
-    workerThread.terminate( );
-  }
+  workerThread.wait( );
 }
 
 void mainWindow::resizeEvent( QResizeEvent* event )
@@ -1406,8 +1440,9 @@ void mainWindow::handleProgressReport( int i, int total )
 {
 
   progressBar->show( );
-  progressBar->setRange( 0, total - 1 );
-  progressBar->setValue( i );
+  const auto safe_total = std::max( 1, total );
+  progressBar->setRange( 0, safe_total );
+  progressBar->setValue( std::clamp( i, 0, safe_total ) );
 
   //  if ( i == total - 1 )
   //  {

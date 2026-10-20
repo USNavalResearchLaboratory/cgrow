@@ -45,6 +45,10 @@
 #include <numeric>
 #include <algorithm>
 #include <iostream>
+#include <cmath>
+#include <functional>
+#include <limits>
+#include <stdexcept>
 
 
 template<typename OStream, typename T, std::size_t N>
@@ -66,9 +70,6 @@ namespace constants
 {
 inline constexpr std::size_t default_search_iterations = 10;
 inline constexpr std::size_t default_subdivisions      = 2;
-inline constexpr std::size_t default_corner_iterations = 50;
-inline constexpr double      test_step_scale           = 0.5;
-inline constexpr double      expanded_step_scale      = 1.5;
 inline constexpr std::size_t default_max_iterations    = 10000;
 inline constexpr double      default_threshold         = 1.0e-4;
 inline constexpr double      default_size_threshold    = 1.0e-4;
@@ -268,6 +269,20 @@ std::array<T, N> searchmin(
 {
 using namespace detail;
 
+static_assert( N > 0, "Nelder-Mead requires at least one dimension." );
+for ( std::size_t i = 0; i != N; ++i )
+{
+    if ( !std::isfinite( x0[i] ) || !std::isfinite( Delta_x0[i] ) || Delta_x0[i] == T( 0 ) )
+    {
+        throw std::invalid_argument( "Initial simplex coordinates must be finite and non-zero." );
+    }
+}
+if ( !std::isfinite( options.threshold ) || !std::isfinite( options.size_threshold )
+     || options.size_threshold < T( 0 ) )
+{
+    throw std::invalid_argument( "Nelder-Mead thresholds must be finite and non-negative." );
+}
+
 using params_t = std::array<T, N>;
 
 using st = std::size_t;
@@ -288,7 +303,7 @@ for ( st i = 1; i!= vertices.size(); i++ )
 }
 }
 
-std::array<T,N+1> func_val{0.0};
+std::array<T,N+1> func_val{};
 {
 for ( st i = 0; i != func_val.size(); i++ )
 {
@@ -300,14 +315,15 @@ for ( st i = 0; i != func_val.size(); i++ )
 step_kind_t step_kind = step_kind_t::initial;
 
 st iteration = 0;
-for ( ;
-iteration                 < options.max_iterations    &&
-func_val[0]               > options.threshold         &&
-simplex_size( vertices )  > options.size_threshold    ;
-
-iteration++ )
+for ( ; iteration < options.max_iterations; ++iteration )
 {
     sort_vertices( func_val, vertices );
+
+    if ( !( func_val[ first_vertex ] > options.threshold
+            && simplex_size( vertices ) > options.size_threshold ) )
+    {
+        break;
+    }
 
 
     callback( func_val, vertices, step_kind );
@@ -424,7 +440,10 @@ struct multi_index_t
         sizes_( sizes ),
         location_( sizes.size() )
     {
-
+        if ( std::any_of( sizes_.begin( ), sizes_.end( ), []( std::size_t size ) { return size == 0; } ) )
+        {
+            throw std::invalid_argument( "Multi-index dimensions must be non-zero." );
+        }
     }
 
     std::size_t rank( ) const { return sizes_.size(); }
@@ -450,10 +469,20 @@ struct multi_index_t
         return compare( other, 0 );
     }
 
-    multi_index_t &operator++( int)
+    multi_index_t& operator++( )
     {
-        advance( rank() - 1 );
+        if ( rank( ) != 0 )
+        {
+            advance( rank() - 1 );
+        }
         return *this;
+    }
+
+    multi_index_t operator++( int )
+    {
+        auto previous = *this;
+        ++( *this );
+        return previous;
     }
 
     const std::vector<std::size_t> &sizes() const { return sizes_; }
@@ -508,7 +537,7 @@ private:
         {
             for ( auto i = index ; i != rank(); i++ )
             {
-                location_[index] = 0;
+                location_[i] = 0;
             }
             advance( index - 1 );
             return;
@@ -584,25 +613,32 @@ class node
     std::vector< node< T > > subnodes;
     std::vector< bounds<T> > bounds_;
 
-    bounds<T> get_bounds_of_subdiv( int index )
+    std::vector< bounds<T> > get_bounds_of_subdiv( std::size_t index ) const
     {
-        std::vector< bounds<T>> subdiv_bounds;
-
-        for ( auto dim = 0; dim != bounds_.size(); dim++ )
+        if ( index >= ( std::size_t( 1 ) << bounds_.size( ) ) )
         {
-            auto middle = ( bounds_[index].lower + bounds_[index].upper ) / 2.0;
+            throw std::out_of_range( "Subdivision index is outside the node bounds." );
+        }
 
-            auto is_the_left = index & (1 << dim); //Binary representation of left and right
+        std::vector< bounds<T> > subdiv_bounds;
+        subdiv_bounds.reserve( bounds_.size( ) );
+
+        for ( std::size_t dim = 0; dim != bounds_.size( ); ++dim )
+        {
+            const auto middle = ( bounds_[dim].lower + bounds_[dim].upper ) / T( 2 );
+
+            const auto is_the_left = ( index & ( std::size_t( 1 ) << dim ) ) != 0;
 
             if ( is_the_left )
             {
-                subdiv_bounds.emplace_back( bounds<T>{ bounds_[index].lower, middle } );
+                subdiv_bounds.emplace_back( bounds<T>{ bounds_[dim].lower, middle } );
             }
             else
             {
-                subdiv_bounds.emplace_back( bounds<T>{ middle, bounds_[index].upper } );
+                subdiv_bounds.emplace_back( bounds<T>{ middle, bounds_[dim].upper } );
             }
         }
+        return subdiv_bounds;
     }
 };
 
@@ -615,9 +651,9 @@ std::vector<T> search(
 {
     using namespace detail;
 
-    if ( !( x0.size() == low.size() && x0.size() == high.size())  )
+    if ( x0.empty( ) || !( x0.size() == low.size() && x0.size() == high.size())  )
     {
-        throw std::runtime_error("x0 and r0 lists should be the same length.");
+        throw std::invalid_argument( "Search vectors must be non-empty and have the same length." );
     }
 
     auto n = x0.size();
@@ -627,6 +663,11 @@ std::vector<T> search(
 
     for ( std::size_t i = 0 ; i != n; i++)
     {
+        if ( !std::isfinite( x0[i] ) || !std::isfinite( low[i] ) || !std::isfinite( high[i] )
+             || low[i] > high[i] || x0[i] < low[i] || x0[i] > high[i] )
+        {
+            throw std::invalid_argument( "Search bounds and initial coordinates must be finite and ordered." );
+        }
         bounds< T > b;
         b.expand( low[ i ] );
         b.expand( high[ i ] );
@@ -634,122 +675,54 @@ std::vector<T> search(
         bounding_box.emplace_back( b );
     }
 
-    auto x = x0;
-    auto fmin = f( x );
-
-
-
-
-    for ( auto k = 0; k != detail::constants::default_search_iterations; k++)
+    // Refine the box using its cell centers.  The old experimental path below
+    // evaluated displacements from x instead of points in the search box and
+    // could never leave the initial point for symmetric objectives.  Keep the
+    // public search API deterministic and bounded by using a straightforward
+    // grid refinement here.
+    auto grid_x     = x0;
+    auto grid_value = std::invoke( f, grid_x );
+    for ( std::size_t iteration = 0; iteration != detail::constants::default_search_iterations;
+          ++iteration )
     {
-        for ( std::size_t j = 0 ; j != n ; j++)
+        multi_index_t grid_index( std::vector< std::size_t >( n, detail::constants::default_subdivisions ) );
+        auto          best_x     = grid_x;
+        auto          best_value = grid_value;
+        while ( grid_index < grid_index.sizes( ) )
         {
-            std::cout << "[ " << bounding_box[j].lower << " " << bounding_box[j].upper << " ]" << std::endl;
-        }
-        std::cout << "New x: " << x << std::endl;
-
-        std::vector<T> func_vals;
-        //func_vals.push_back( fmin );
-
-        std::vector<std::vector<double>> xs;
-        //xs.push_back( x );
-
-        multi_index_t mi( std::vector<std::size_t>( n, detail::constants::default_subdivisions ) );
-
-        std::vector<bounds<T>> new_bounds( n );
-        std::vector<T> newx(n);
-
-        std::size_t count = 0;
-        for ( ; mi < mi.sizes(); mi++ )
-        {
-            auto l = mi.location();
-
-            std::vector<double> xcorner;
-
-            for ( std::size_t i = 0 ; i != l.size(); i++ )
+            const auto location = grid_index.location( );
+            std::vector< T > candidate;
+            candidate.reserve( n );
+            for ( std::size_t dimension = 0; dimension != n; ++dimension )
             {
-                if ( l[i] == 0 )
-                {
-                    xcorner.push_back( bounding_box[i].lower );
-                }
-                else
-                {
-                    xcorner.push_back( bounding_box[i].upper );
-                }
+                const auto width = bounding_box[ dimension ].upper - bounding_box[ dimension ].lower;
+                candidate.push_back( bounding_box[ dimension ].lower
+                                     + width * ( T( location[ dimension ] ) + T( 0.5 ) )
+                                         / T( detail::constants::default_subdivisions ) );
             }
 
-
-            for ( auto i = 0; i != detail::constants::default_corner_iterations; i++)
+            const auto value = std::invoke( f, candidate );
+            if ( value < best_value )
             {
-                auto fcorner = f( xcorner ) ;
-
-                auto test = detail::constants::test_step_scale * (xcorner - x);
-                auto ftest = f( test );
-                std::cout << fcorner << ", " << ftest << std::endl;
-
-                if ( f( test ) > f( xcorner ) )
-                {
-                    test = detail::constants::expanded_step_scale * (xcorner - x );
-
-                }
-                xcorner = test;
+                best_value = value;
+                best_x     = std::move( candidate );
             }
-
-            for ( std::size_t i = 0; i !=n; i++ )
-            {
-                new_bounds[i].expand( xcorner[i] );
-            }
-
-            newx = newx + xcorner;
-
-            count++;
-
-            std::cout << std::endl;
-
-            //            xs.push_back( x );
-            //            func_vals.push_back( f(xcorner) );
-
-            //            xs.push_back( mid );
-            //            func_vals.push_back( f(mid) );
-
-            //                   std::cout << "xcorner: " << xcorner << " " << *func_vals.rbegin() << std::endl;
-            //                   std::cout << "mid: " << mid << " " << *func_vals.rbegin() << std::endl;
+            ++grid_index;
         }
 
-        //  auto idx = detail::sort_indexes( func_vals );
-
-        //   std::vector<bounds<T>> new_bounds( n );
-
-
-        newx = (1.0/count) * newx;
-        //        for ( std::size_t i = 0 ; i !=idx.size() / 2 ; i ++)
-        //        {
-        //            for ( std::size_t j = 0 ; j != n ; j++)
-        //            {
-        //                new_bounds[j].expand( xs[idx[i]][j] );
-        //            }
-        //        }
-
-
-
-        //        for ( std::size_t i = 0; i !=idx.size() / 2; i++ )
-        //        {
-        //            std::cout << xs[idx[i]] << "aa" << std::endl;
-        //            newx = newx + (1.0/(idx.size() / 2)) * xs[idx[i]];
-        //        }
-
-        auto fnewx = f(newx);
-
-        if ( fnewx < fmin )
+        grid_x     = std::move( best_x );
+        grid_value = best_value;
+        for ( std::size_t dimension = 0; dimension != n; ++dimension )
         {
-            x=newx;
-            fmin =fnewx;
+            const auto half_width = ( bounding_box[ dimension ].upper
+                                      - bounding_box[ dimension ].lower )
+                                    * T( 0.25 );
+            bounding_box[ dimension ].lower = std::max( low[ dimension ], grid_x[ dimension ] - half_width );
+            bounding_box[ dimension ].upper = std::min( high[ dimension ], grid_x[ dimension ] + half_width );
         }
-
-
-
-        bounding_box = new_bounds;
     }
+    return grid_x;
+
 }
 }
 

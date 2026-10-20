@@ -1,5 +1,7 @@
 #include "test_series.hpp"
 
+#include <cmath>
+
 const QString &test_series_t::id() const
 {
     return id_;
@@ -43,7 +45,7 @@ void test_series_t::read(const QJsonObject &json)
     {
         data.R = json["R"].toDouble();
 
-        if ( data.R < -1.0 || data.R > 1.0 )
+        if ( !std::isfinite( data.R ) || data.R < -1.0 || data.R >= 1.0 )
         {
             throw std::runtime_error("Json series does not contain a proper R value.");
         }
@@ -60,7 +62,12 @@ void test_series_t::read(const QJsonObject &json)
         {
             if ( v.isDouble())
             {
-                newx.push_back( v.toDouble() );
+                const auto value = v.toDouble( );
+                if ( !std::isfinite( value ) || value <= 0.0 )
+                {
+                    throw std::runtime_error( "DeltaK values must be finite and positive." );
+                }
+                newx.push_back( value );
             }
             else
             {
@@ -82,7 +89,12 @@ void test_series_t::read(const QJsonObject &json)
         {
             if ( v.isDouble())
             {
-                newy.push_back( v.toDouble() );
+                const auto value = v.toDouble( );
+                if ( !std::isfinite( value ) || value <= 0.0 )
+                {
+                    throw std::runtime_error( "dadN values must be finite and positive." );
+                }
+                newy.push_back( value );
             }
             else
             {
@@ -98,6 +110,10 @@ void test_series_t::read(const QJsonObject &json)
     if ( newx.size() != newy.size() )
     {
        throw std::runtime_error("Size of DeltaKs and dadNs do not match in the json file.");
+    }
+    if ( newx.isEmpty( ) )
+    {
+        throw std::runtime_error("A test series must contain at least one data point.");
     }
 
     data.points.clear();

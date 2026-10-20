@@ -49,10 +49,27 @@ int main()
 
     nelder_mead::multi_index_t mi({2,2,2,2});
 
-
+    std::size_t multi_index_count = 0;
     for (; mi < mi.sizes(); mi++ )
     {
-        std::cout << "mi: " << mi << std::endl;
+        ++multi_index_count;
+    }
+    if ( multi_index_count != 16 )
+    {
+        return 2;
+    }
+
+    const auto grid_result = nelder_mead::search< double >(
+        []( const std::vector< double >& x ) {
+            return std::pow( x[ 0 ] - 1.0, 2 ) + std::pow( x[ 1 ] - 1.0, 2 );
+        },
+        { 0.0, 0.0 },
+        { -2.0, -2.0 },
+        { 2.0, 2.0 } );
+    if ( grid_result.size( ) != 2 || std::abs( grid_result[ 0 ] - 1.0 ) > 1.0e-3
+         || std::abs( grid_result[ 1 ] - 1.0 ) > 1.0e-3 )
+    {
+        return 3;
     }
 
 
@@ -94,8 +111,10 @@ int main()
     }
 
     if ( std::abs( res[0] - 1.0 ) < options.size_threshold &&
-         std::abs( res[0] - 1.0 ) < options.size_threshold )
+         std::abs( res[1] - 1.0 ) < options.size_threshold )
     {
         return 0;
     }
+
+    return 1;
 }

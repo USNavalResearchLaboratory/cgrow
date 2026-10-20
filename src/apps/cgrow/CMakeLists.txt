@@ -3,6 +3,11 @@ set(CMAKE_AUTORCC ON)
 
 project( cgrow )
 
+if( WIN32 )
+  set(NOCONSOLEWIN WIN32)
+  set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/appicon.rc")
+endif()
+
 find_package(QT NAMES Qt6 Qt5 COMPONENTS Widgets PrintSupport Svg REQUIRED)
 find_package(Qt${QT_VERSION_MAJOR} COMPONENTS Widgets PrintSupport Svg REQUIRED)
 if(QT_VERSION_MAJOR GREATER_EQUAL 6)
@@ -42,15 +47,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
 else()
   add_executable(cgrow ${CGROW_EXECUTABLE_ITEMS} )
 endif()
-if( WIN32 )
-  set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/appicon.rc")
-endif()
-
 find_package( Threads REQUIRED )
-
-if( WIN32 )
-  set( NOCONSOLEWIN WIN32 )
-endif()
 
 target_link_libraries( cgrow
   PRIVATE
@@ -76,6 +73,7 @@ set_target_properties( cgrow
   )
 
 set_property(TARGET cgrow PROPERTY CXX_STANDARD 17)
+set_property(TARGET cgrow PROPERTY CXX_STANDARD_REQUIRED ON)
 
 if (WIN32)
   WinDeployQt(TARGET cgrow )

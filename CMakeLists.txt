@@ -11,7 +11,7 @@ include( FetchContent )
 FetchContent_Declare(
   cxxplot
   GIT_REPOSITORY "https://github.com/USNavalResearchLaboratory/cxxplot.git"
-  GIT_TAG main
+  GIT_TAG 1f53bfca071a664eaed66a3f00a9f649744de8ad
   )
 
 set (OLD_BUILD_SHARED ${BUILD_SHARED_LIBS})
@@ -29,7 +29,7 @@ set (NLOPT_CXX11 ON CACHE INTERNAL "") # NLOPT DETECTS THIS ONLY FOR GCC. WE MAY
 
 FetchContent_Declare(
   nlopt
-  GIT_REPOSITORY "git://github.com/stevengj/nlopt"
+  GIT_REPOSITORY "https://github.com/stevengj/nlopt.git"
   GIT_TAG "41967f1981d82d8495c0b27151a126bc35ae0d96"
   )
 

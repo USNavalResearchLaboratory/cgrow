@@ -45,7 +45,10 @@
 #include <cgrow.hpp>
 
 #include <QMutex>
+#include <QMutexLocker>
 #include <QObject>
+
+#include <atomic>
 
 // Todo: move hs_parameters_t inside the fitting worker
 using real_t          = long double;
@@ -70,7 +73,6 @@ real_t calc_min_A( const test_data_t& test );
 real_t calc_min_A( const std::vector< test_data_t >& tests );
 
 real_t calc_max_A( const real_t& Amin );
-real_t calc_max_A( const real_t& Amin );
 
 inline constexpr real_t minD = 1e-12;
 inline constexpr real_t maxD = 1e-4;
@@ -91,9 +93,9 @@ public:
     return stop_requested_;
   };
 
-  const bool& running( ) const
+  bool running( ) const
   {
-    return running_;
+    return running_.load( std::memory_order_acquire );
   };
 
 public slots:
@@ -124,9 +126,11 @@ signals:
 
   void finished();
 
+  void failed( const QString& message );
+
 private:
   std::atomic_bool stop_requested_{ false };
-  bool running_        = false; // todo: atomic bools
+  std::atomic_bool running_{ false };
 
   QMutex calback_mutex;
 };
