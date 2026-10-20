@@ -6,7 +6,7 @@ CGROW is a C++17 library, test suite, and graphical application for identifying 
 CGROW fits the Hartman–Schijve crack-growth relation across one or more stress-ratio (`R`) datasets:
 
 <p align="center">
-  <img src="src/apps/cgrow/assets/hseqn.svg" width="320" alt="Hartman–Schijve crack-growth equation">
+  <img src="src/apps/cgrow/assets/hseqn.svg" width="240" alt="Hartman–Schijve crack-growth equation">
 </p>
 
 The model represents the threshold region through `ΔK_thr` and the high-growth asymptote through
