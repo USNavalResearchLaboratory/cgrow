@@ -15,3 +15,5 @@ target_link_libraries(
         libcgrow
         nlopt
     )
+
+add_test( NAME 02_test_nelder_mead COMMAND $<TARGET_FILE:${HSFIT_CURRENT_TARGET_NAME}> )

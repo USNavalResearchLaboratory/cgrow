@@ -1,6 +1,9 @@
+enable_testing()
+
 add_subdirectory( 01_test )
 add_subdirectory( 02_test_nelder_mead )
 add_subdirectory( 03_test_pertrubed_ordinary )
 add_subdirectory( 04_test_pertrubed_total )
 add_subdirectory( 05_test_general_cuhyso )
 add_subdirectory( 06_test_cgrow_mutliparam )
+add_subdirectory( 07_test_cgrow_regressions )

@@ -86,7 +86,7 @@ class fittingWorker : public QObject
 {
   Q_OBJECT
 public:
-  const bool& stop_requested( ) const
+  const std::atomic_bool& stop_requested( ) const
   {
     return stop_requested_;
   };
@@ -125,7 +125,7 @@ signals:
   void finished();
 
 private:
-  bool stop_requested_ = false;
+  std::atomic_bool stop_requested_{ false };
   bool running_        = false; // todo: atomic bools
 
   QMutex calback_mutex;

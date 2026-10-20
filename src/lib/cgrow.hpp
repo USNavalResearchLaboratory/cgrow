@@ -43,24 +43,33 @@
 #include "nelder_mead.hpp"
 
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <thread>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
-
-inline int        totalevals = 0;
-inline std::mutex stdoutmutex;
-
-#define HS_MAX_ITERS 60
 
 namespace cuhyso
 {
+
+namespace constants
+{
+inline constexpr std::size_t minimum_thread_count       = 1;
+inline constexpr std::size_t default_iteration_eval_budget = 2000;
+inline constexpr int         default_almost_equal_ulp   = 2;
+inline constexpr int         collapsed_range_ulp        = 4;
+inline constexpr double      half_range                 = 0.5;
+}
 
 template< class List >
 using callback_t = std::function< void( List, List, List ) >;
@@ -72,7 +81,7 @@ namespace detail
 
 template< class T >
 typename std::enable_if< !std::numeric_limits< T >::is_integer, bool >::type almost_equal(
-  T x, T y, const int& ulp = 2 )
+  T x, T y, const int& ulp = constants::default_almost_equal_ulp )
 {
 
   return std::fabs( x - y ) <= std::numeric_limits< T >::epsilon( ) * std::fabs( x + y ) * ulp
@@ -87,8 +96,8 @@ auto contract_range( const T& lower, const T& upper, const T& new_center, const 
   auto dif    = upper - lower;
   auto newdif = dif / amortization;
 
-  auto new_lower = new_center - newdif / 2;
-  auto new_upper = new_center + newdif / 2;
+  auto new_lower = new_center - newdif * T( constants::half_range );
+  auto new_upper = new_center + newdif * T( constants::half_range );
 
   if ( new_upper > upper )
   {
@@ -128,32 +137,47 @@ T sample_parameter( const T&           min,
     return min + step * m;
   }
 
-  return ( max + min ) / 2.0;
+  return ( max + min ) / T( 2 );
 };
 
 template< class T, class F, class List >
-bool generate_eval_set( F&&                  f,
-                        List                 low,
-                        List                 high,
-                        std::size_t          subdivisions,
+bool generate_eval_set( F&&                f,
+                        const List&        low,
+                        const List&        high,
+                        std::size_t        subdivisions,
                         std::vector< List >& eval_set,
-                        std::atomic_bool&    stop_requested,
-                        List                 upstreamParams,
-                        const std::size_t&   paramID = 0 )
+                        const std::atomic_bool& stop_requested,
+                        List&              upstreamParams,
+                        std::size_t        paramID = 0 )
 {
+  (void)f;
   auto num_params = low.size( );
+
+  if ( num_params == 0 || high.size( ) != num_params )
+  {
+    throw std::invalid_argument( "Parameter bounds must be non-empty and have matching sizes." );
+  }
+  if ( subdivisions == 0 )
+  {
+    throw std::invalid_argument( "The number of subdivisions must be greater than zero." );
+  }
+  if ( upstreamParams.size( ) != num_params )
+  {
+    throw std::invalid_argument( "The upstream parameter list has the wrong size." );
+  }
 
   auto l = low[ paramID ];
   auto h = high[ paramID ];
 
-  if ( detail::almost_equal( l, h, 4 ) )
+  if ( detail::almost_equal( l, h, constants::collapsed_range_ulp ) )
   {
     subdivisions = 1;
   }
 
   if ( paramID < num_params - 1 )
   {
-    for ( std::size_t i = 0; i != subdivisions && !stop_requested; i++ )
+    for ( std::size_t i = 0; i != subdivisions
+                           && !stop_requested.load( std::memory_order_relaxed ); i++ )
     {
       upstreamParams[ paramID ] = cuhyso::sample_parameter( l, h, subdivisions, i );
       generate_eval_set< T >(
@@ -162,14 +186,15 @@ bool generate_eval_set( F&&                  f,
   }
   else
   {
-    for ( std::size_t i = 0; i != subdivisions && !stop_requested; i++ )
+    for ( std::size_t i = 0; i != subdivisions
+                           && !stop_requested.load( std::memory_order_relaxed ); i++ )
     {
       upstreamParams[ paramID ] = cuhyso::sample_parameter( l, h, subdivisions, i );
       eval_set.push_back( upstreamParams );
     }
   }
 
-  return !stop_requested;
+  return !stop_requested.load( std::memory_order_relaxed );
 }
 
 template< class T, class F, class ParamList >
@@ -183,55 +208,61 @@ void minimize(
   callback_t< ParamList > new_min_callback  = []( ParamList, ParamList, ParamList ) {},
   progress_callback_t     progress_callback = []( std::size_t, std::size_t ) {},
   std::size_t             iterations        = 0,
-  const std::size_t&      num_threads       = std::thread::hardware_concurrency( ) )
+  std::size_t              num_threads       = std::max< std::size_t >(
+    constants::minimum_thread_count, std::thread::hardware_concurrency( ) ) )
 {
 
-  using namespace std::chrono;
+  stop_requested.store( false, std::memory_order_relaxed );
 
-  stop_requested = false;
+  if ( low.size( ) == 0 || high.size( ) != low.size( ) )
+  {
+    throw std::invalid_argument( "Parameter bounds must be non-empty and have matching sizes." );
+  }
+  if ( subdivisions == 0 )
+  {
+    throw std::invalid_argument( "The number of subdivisions must be greater than zero." );
+  }
+  if ( !std::isfinite( static_cast< double >( amortization ) ) || amortization <= T( 1 ) )
+  {
+    throw std::invalid_argument( "Amortization must be finite and greater than one." );
+  }
+  num_threads = std::max< std::size_t >( constants::minimum_thread_count, num_threads );
 
   if ( iterations == 0 )
   {
-    iterations = std::log( 2000.0 ) / std::log( amortization );
+    iterations = static_cast< std::size_t >(
+      std::log( T( constants::default_iteration_eval_budget ) ) / std::log( amortization ) );
   }
 
   std::vector< ParamList > eval_set;
-
-  ParamList params;
-
-  std::atomic< T > minVal = std::numeric_limits< T >::max( );
-
-  ParamList  minList;
+  ParamList params  = low;
+  ParamList minList = low;
   std::mutex minListMutex;
-
-  auto round_complete = []( auto& thread_finished ) {
-    bool finished = true;
-    for ( const auto& f : thread_finished )
-    {
-      finished &= *f;
-    }
-    return finished;
-  };
-
-  steady_clock::time_point start;
-  std::atomic< double >    single_thread_round_duration_ms = -1.0;
 
   for ( auto i = 0; i != iterations; i++ )
   {
+    eval_set.clear( );
+    params = low;
     generate_eval_set< T >(
-      std::forward< F >( f ), low, high, subdivisions, eval_set, stop_requested, params );
+      f, low, high, subdivisions, eval_set, stop_requested, params );
 
-    std::vector< std::unique_ptr< std::atomic_bool > > thread_finished( num_threads );
-    for ( std::size_t i = 0; i != num_threads; i++ )
+    if ( stop_requested.load( std::memory_order_relaxed ) || eval_set.empty( ) )
     {
-      thread_finished[ i ] = std::make_unique< std::atomic_bool >( false );
+      break;
     }
 
+    T minVal = std::numeric_limits< T >::max( );
+    minList  = low;
+    const auto worker_count = std::min( num_threads, eval_set.size( ) );
+    std::exception_ptr thread_error;
+    std::mutex         thread_error_mutex;
+
     std::vector< std::thread > threads;
-    for ( std::size_t tid = 0; tid != num_threads; tid++ )
+    threads.reserve( worker_count );
+    for ( std::size_t tid = 0; tid != worker_count; tid++ )
     {
       threads.push_back( std::thread( [ tid,
-                                        num_threads,
+                                        worker_count,
                                         &minVal,
                                         &minList,
                                         &minListMutex,
@@ -240,68 +271,59 @@ void minimize(
                                         &low,
                                         &high,
                                         &new_min_callback,
-                                        &thread_finished,
-                                        &single_thread_round_duration_ms,
-                                        &start ]( ) {
-        if ( tid == 0 && single_thread_round_duration_ms < 0 )
+                                        &stop_requested,
+                                        &thread_error,
+                                        &thread_error_mutex ]( ) {
+        try
         {
-          start = steady_clock::now( );
-        }
-
-//        if ( tid == 0 )
-//        {
-//          for ( auto k = 0; k != low.size( ); k++ )
-//          {
-
-//            std::cout << "ttt--- " << low[ k ] << " : " << minList[ k ] << " : " << high[ k ]
-//                      << " | " << std::endl;
-//          }
-//        }
-
-        for ( auto i = tid; i < eval_set.size( ); i += num_threads )
-        {
-          const auto& p = eval_set[ i ];
-          auto        v = f( p );
-          if ( v < minVal )
+          for ( auto eval_index = tid; eval_index < eval_set.size( ); eval_index += worker_count )
           {
-            minListMutex.lock( );
-            minVal  = v;
-            minList = p;
-            new_min_callback( p, low, high );
-            minListMutex.unlock( );
+            if ( stop_requested.load( std::memory_order_relaxed ) )
+            {
+              break;
+            }
+
+            const auto& p = eval_set[ eval_index ];
+            const auto  v = std::invoke( f, p );
+            std::lock_guard< std::mutex > lock( minListMutex );
+            if ( v < minVal )
+            {
+              minVal  = v;
+              minList = p;
+              new_min_callback( p, low, high );
+            }
           }
         }
-
-        if ( tid == 0 && single_thread_round_duration_ms < 0 )
+        catch ( ... )
         {
-          single_thread_round_duration_ms
-            = double( duration_cast< microseconds >( steady_clock::now( ) - start ).count( ) )
-              / 1.0e3;
+          {
+            std::lock_guard< std::mutex > lock( thread_error_mutex );
+            if ( !thread_error )
+            {
+              thread_error = std::current_exception( );
+            }
+          }
+          stop_requested.store( true, std::memory_order_relaxed );
         }
-
-        *( thread_finished[ tid ] ) = true;
       } ) );
     }
 
-    while ( !round_complete( thread_finished ) )
+    for ( auto& thread : threads )
     {
-      if ( single_thread_round_duration_ms > 5 )
-      {
-        // std::cout << "Sleeping: " << single_thread_round_duration_ms << std::endl;
-        std::this_thread::sleep_for(
-          std::chrono::milliseconds( int( single_thread_round_duration_ms / 5 ) ) );
-        // Windows will sleep for at least 20ms here. Maybe address this with a bit different logic
-      }
+      thread.join( );
     }
-
-    for ( std::size_t tid = 0; tid != num_threads; tid++ )
+    if ( thread_error )
     {
-      threads[ tid ].join( );
+      std::rethrow_exception( thread_error );
     }
 
     progress_callback( i, iterations );
 
-   // std::cout << minVal << std::endl;
+    if ( minVal == std::numeric_limits< T >::max( ) )
+    {
+      break;
+    }
+
     for ( auto k = 0; k != low.size( ); k++ )
     {
       std::tie( low[ k ], high[ k ] )
@@ -318,6 +340,11 @@ void minimize(
 
 namespace crack_growth
 {
+
+namespace constants
+{
+inline constexpr double minimum_positive_value = 1.0e-19;
+}
 
 template< typename T >
 struct data_point_t
@@ -340,10 +367,10 @@ template< typename T, class Container_t >
 T computeAxesScale( const Container_t& test_set )
 {
   T DKmin = std::numeric_limits< T >::max( );
-  T DKmax = 1e-19;
+  T DKmax = T( constants::minimum_positive_value );
 
   T dadNmin = std::numeric_limits< T >::max( );
-  T dadNmax = 1e-19;
+  T dadNmax = T( constants::minimum_positive_value );
 
   for ( const auto& test : test_set )
   {
@@ -356,8 +383,10 @@ T computeAxesScale( const Container_t& test_set )
     }
   }
 
-  return ( std::log10( dadNmax ) - std::log10( std::max( dadNmin, T( 1e-19 ) ) ) )
-         / ( std::log10( DKmax ) - std::log10( std::max( DKmin, T( 1e-19 ) ) ) );
+  return ( std::log10( dadNmax )
+           - std::log10( std::max( dadNmin, T( constants::minimum_positive_value ) ) ) )
+         / ( std::log10( DKmax )
+             - std::log10( std::max( DKmin, T( constants::minimum_positive_value ) ) ) );
 }
 
 namespace CUHYSO
@@ -380,6 +409,37 @@ namespace CUHYSO
 
 namespace Hartman_Schijve
 {
+inline constexpr std::size_t HS_MAX_ITERS = 60;
+inline std::atomic<std::size_t> totalevals{ 0 };
+inline std::mutex stdoutmutex;
+inline const std::atomic_bool default_stop_requested{ false };
+
+namespace constants
+{
+inline constexpr double distance_metric_scale      = 0.18861169701161387;
+inline constexpr double minimum_distance2_scale    = 0.03557437224960084;
+inline constexpr double minimum_dadN_for_distance  = 1.0e-17;
+inline constexpr double bisection_relative_margin  = 1.0e-4;
+inline constexpr double minimum_scale              = 1.0e-10;
+inline constexpr double maximum_scale              = 1.0e10;
+inline constexpr double invalid_objective_distance = 1000000.0;
+inline constexpr double default_iteration_budget   = 4000.0;
+inline constexpr std::size_t default_subdivisions   = 7;
+inline constexpr double default_amortization       = 1.02;
+inline constexpr double default_D_min              = 1.0e-10;
+inline constexpr double default_D_max              = 5.0e-10;
+inline constexpr double default_p_min              = 1.7;
+inline constexpr double default_p_max              = 2.3;
+inline constexpr double default_DeltaK_thr_min     = 0.0001;
+inline constexpr double default_DeltaK_thr_factor  = 1.05;
+inline constexpr double default_A_min_factor       = 0.9;
+inline constexpr double default_A_max              = 450.0;
+inline constexpr double fixed_range_tolerance      = 1.0e-19;
+inline constexpr double scale_exponent             = 10.0;
+inline constexpr std::size_t minimum_fit_threads    = 4;
+inline constexpr std::size_t wrapper_subdivisions   = 12;
+}
+
 
 template< class T >
 struct parameters
@@ -417,7 +477,7 @@ T evaluate( const T& D, const T& p, const T& DeltaK_thr, const T& A, const T& R,
 {
   auto s = DeltaK / ( A * ( T { 1.0 } - R ) );
 
-  return D * std::pow( ( DeltaK - DeltaK_thr ) / ( std::sqrt( 1.0 - s ) ), p );
+  return D * std::pow( ( DeltaK - DeltaK_thr ) / ( std::sqrt( T( 1 ) - s ) ), p );
 }
 
 template< class T >
@@ -454,7 +514,7 @@ T DistanceScaled( const T& DeltaK,
                   const T& sc )
 {
 
-  return 0.18861169701161387
+  return constants::distance_metric_scale
          * ( pow( log( DeltaK ) - 1. * log( DeltaKi ), 2 )
              + pow( sc, 2 )
                  * pow( log( dadNi )
@@ -480,7 +540,7 @@ T DistanceDeriv( const T& DeltaK,
   T S1 = -1. + R;
   T S2 = DeltaK - DeltaKthr;
 
-  return 0.18861169701161387
+  return constants::distance_metric_scale
          * ( ( 2. * ( log( DeltaK ) - 1. * log( DeltaKi ) ) ) / DeltaK
              - ( 1. * p * ( DeltaK + DeltaKthr + 2. * A * S1 ) * pow( sc, 2 )
                  * ( log( dadNi )
@@ -505,7 +565,7 @@ auto minimum_distance2( const T& DeltaKi,
   T S3 = pow( dadNi / DD, 2. / p );
 
   T v
-    = 0.03557437224960084 * pow( scale, 2 )
+    = constants::minimum_distance2_scale * pow( scale, 2 )
       * pow(
         log( dadNi )
           - 1.
@@ -532,14 +592,14 @@ std::tuple< T, std::size_t > minimum_distance( const T& DeltaKi,
                                                const T& A,
                                                const T& scale )
 {
-  if ( dadNi < 1e-17 )
+  if ( dadNi < T( constants::minimum_dadN_for_distance ) )
   {
     return std::make_tuple( DeltaKthr, std::size_t( 0 ) );
   }
 
-  constexpr T beta   = 1.0e-4;
-  const T     DKlow  = DeltaKthr * ( 1.0 + beta );
-  const T     DKhigh = A * ( 1.0 - R ) * ( 1.0 - beta );
+  constexpr T beta   = T( constants::bisection_relative_margin );
+  const T     DKlow  = DeltaKthr * ( T( 1 ) + beta );
+  const T     DKhigh = A * ( T( 1 ) - R ) * ( T( 1 ) - beta );
 
   T dlow  = DistanceDeriv( DKlow, DeltaKi, dadNi, R, DD, p, DeltaKthr, A, scale );
   T dhigh = DistanceDeriv( DKhigh, DeltaKi, dadNi, R, DD, p, DeltaKthr, A, scale );
@@ -571,12 +631,14 @@ std::tuple< T, std::size_t > minimum_distance( const T& DeltaKi,
 
   std::size_t niters = 0;
 
-  const T tol  = ( std::log10( DKhigh ) - std::log10( DKlow ) ) * 1.0e-4;
+  const T tol  = ( std::log10( DKhigh ) - std::log10( DKlow ) )
+               * T( constants::bisection_relative_margin );
   auto    span = std::abs( std::log10( xpos ) - std::log10( xneg ) );
 
-  while ( niters++ < HS_MAX_ITERS && span > tol )
+  while ( niters < HS_MAX_ITERS && span > tol )
   {
-    T xhalf    = ( xpos + xneg ) / 2.0;
+    ++niters;
+    T xhalf    = ( xpos + xneg ) / T( 2 );
     T dhalfway = DistanceDeriv( xhalf, DeltaKi, dadNi, R, DD, p, DeltaKthr, A, scale );
 
     if ( dhalfway > 0 )
@@ -588,12 +650,12 @@ std::tuple< T, std::size_t > minimum_distance( const T& DeltaKi,
       xneg = xhalf;
     }
 
-    auto span = std::abs( std::log10( xpos ) - std::log10( xneg ) );
+    span = std::abs( std::log10( xpos ) - std::log10( xneg ) );
   }
 
   return std::make_tuple(
-    DistanceScaled( ( xpos + xneg ) / 2.0, DeltaKi, dadNi, R, DD, p, DeltaKthr, A, scale ),
-    std::size_t( 1 ) );
+    DistanceScaled( ( xpos + xneg ) / T( 2 ), DeltaKi, dadNi, R, DD, p, DeltaKthr, A, scale ),
+    niters );
 }
 
 template< class T, class Container_t >
@@ -668,7 +730,7 @@ Model_Distance_t< T > objective_function( const parameters< T >& hs_params,
 
   if ( num_utlized_points == 0 )
   {
-    return Model_Distance_t( T( 1000000.0 ), 0.0 );
+    return Model_Distance_t( T( constants::invalid_objective_distance ), 0.0 );
   }
 
   return Model_Distance_t { sum / num_utlized_points, utilization };
@@ -691,14 +753,14 @@ template< class T, class Container_t >
 parameters< T > fit(
   parameters< T >     search_space_min,
   parameters< T >     search_space_max,
-  Container_t         test_set,
-  const std::size_t   subdivisions  = 7,
-  const double&       amortization  = 1.02,
+  const Container_t&   test_set,
+  const std::size_t subdivisions = constants::default_subdivisions,
+  const double& amortization = constants::default_amortization,
   std::size_t         iterations    = 0,
   bool                use_geometric = false,
   callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
   progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
-  const bool&         stop_requested                           = false,
+  const std::atomic_bool& stop_requested                        = default_stop_requested,
   std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
 {
   using params_t = parameters< T >;
@@ -708,8 +770,8 @@ parameters< T > fit(
         auto dif    = upper - lower;
         auto newdif = dif / amortization;
 
-        auto new_lower = new_center - newdif / 2;
-        auto new_upper = new_center + newdif / 2;
+        auto new_lower = new_center - newdif / T( 2 );
+        auto new_upper = new_center + newdif / T( 2 );
 
         if ( new_upper > upper )
         {
@@ -732,18 +794,21 @@ parameters< T > fit(
 
   if ( iterations == 0 )
   {
-    iterations = std::log( 4000.0 ) / std::log( amortization );
+    iterations = static_cast< std::size_t >(
+      std::log( constants::default_iteration_budget ) / std::log( amortization ) );
   }
 
   auto subd = subdivisions;
 
   auto subdD = subd;
-  if ( std::fabs( search_space_max.D - search_space_min.D ) < 1e-19 )
+  if ( std::fabs( search_space_max.D - search_space_min.D )
+       < constants::fixed_range_tolerance )
   {
     subdD = 1;
   }
 
-  st num_threads = std::max( ( unsigned int )( 4 ), std::thread::hardware_concurrency( ) );
+  st num_threads = std::max( static_cast< st >( constants::minimum_fit_threads ),
+                             static_cast< st >( std::thread::hardware_concurrency( ) ) );
   num_threads    = std::min( num_threads, subdD );
 
   std::cout << "Num threads: " << num_threads << std::endl;
@@ -760,12 +825,12 @@ parameters< T > fit(
 
   auto scale = crack_growth::computeAxesScale< T >( test_set );
 
-  if ( scale < 1.0e-10 || scale > 1.0e10 )
+  if ( scale < constants::minimum_scale || scale > constants::maximum_scale )
   {
     throw std::runtime_error( "Test data relative scales vary orders of magnitude." );
   }
 
-  for ( st t = 0; t != iterations && !stop_requested; t++ )
+  for ( st t = 0; t != iterations && !stop_requested.load( std::memory_order_relaxed ); t++ )
   {
     std::vector< std::thread > threads;
 
@@ -779,7 +844,7 @@ parameters< T > fit(
                                         subdD,
                                         tid,
                                         num_threads,
-                                        stop_requested,
+                                        &stop_requested,
                                         search_space_min,
                                         search_space_max,
                                         use_geometric,
@@ -792,7 +857,8 @@ parameters< T > fit(
         auto start  = D_index_span * tid;
         auto finish = ( tid == num_threads - 1 ) ? subdD : start + D_index_span;
 
-        for ( auto dj = start; dj != finish && !stop_requested; dj++ )
+        for ( auto dj = start; dj != finish
+                         && !stop_requested.load( std::memory_order_relaxed ); dj++ )
         {
           params_t obj_params;
 
@@ -804,53 +870,60 @@ parameters< T > fit(
           auto hil  = std::log10( hi );
 
           auto dl      = cuhyso::sample_parameter( lowl, hil, subdD, dj );
-          obj_params.D = std::pow( 10.0, dl );
+      obj_params.D = std::pow( T( constants::scale_exponent ), dl );
 
           auto subdp = subd;
-          if ( std::fabs( search_space_max.p - search_space_min.p ) < 1e-19 )
+          if ( std::fabs( search_space_max.p - search_space_min.p )
+               < constants::fixed_range_tolerance )
           {
             subdp = 1;
           }
 
-          for ( st pj = 0; pj != subdp && !stop_requested; pj++ )
+          for ( st pj = 0; pj != subdp
+                         && !stop_requested.load( std::memory_order_relaxed ); pj++ )
           {
             auto low = search_space_min.p;
             auto hi  = search_space_max.p;
 
-            obj_params.p = cuhyso::sample_parameter( low, hi, subd, pj );
+            obj_params.p = cuhyso::sample_parameter( low, hi, subdp, pj );
 
             auto subdDeltaKj = subd;
-            if ( std::fabs( search_space_max.DeltaK_thr - search_space_min.DeltaK_thr ) < 1e-19 )
+            if ( std::fabs( search_space_max.DeltaK_thr - search_space_min.DeltaK_thr )
+                 < constants::fixed_range_tolerance )
             {
               subdDeltaKj = 1;
             }
 
-            for ( st DeltaKj = 0; DeltaKj != subdDeltaKj && !stop_requested; DeltaKj++ )
+            for ( st DeltaKj = 0; DeltaKj != subdDeltaKj
+                               && !stop_requested.load( std::memory_order_relaxed ); DeltaKj++ )
             {
               auto low = search_space_min.DeltaK_thr;
               auto hi  = search_space_max.DeltaK_thr;
 
-              obj_params.DeltaK_thr = cuhyso::sample_parameter( low, hi, subd, DeltaKj );
+              obj_params.DeltaK_thr
+                = cuhyso::sample_parameter( low, hi, subdDeltaKj, DeltaKj );
 
               auto subdA = subd;
-              if ( std::fabs( search_space_max.A - search_space_min.A ) < 1e-19 )
+              if ( std::fabs( search_space_max.A - search_space_min.A )
+                   < constants::fixed_range_tolerance )
               {
                 subdA = 1;
               }
 
-              for ( st Aj = 0; Aj != subdA && !stop_requested; Aj++ )
+              for ( st Aj = 0; Aj != subdA
+                             && !stop_requested.load( std::memory_order_relaxed ); Aj++ )
               {
                 auto low = search_space_min.A;
                 auto hi  = search_space_max.A;
 
-                obj_params.A = cuhyso::sample_parameter( low, hi, subd, Aj );
+                obj_params.A = cuhyso::sample_parameter( low, hi, subdA, Aj );
 
                 per_thread_callback( obj_params );
 
                 // auto d = objective_function( obj_params, use_geometric, test_set );
 
                 auto d = objective_function( obj_params, use_geometric, test_set, scale );
-                totalevals++;
+                totalevals.fetch_add( 1, std::memory_order_relaxed );
                 if ( d.utilization > max_utilization_mins[ tid ]
                      || // prefer utilization over minimization
                      ( objective_mins[ tid ] > d.distance
@@ -907,8 +980,8 @@ parameters< T > fit(
                                                std::log10( params_at_min.D ),
                                                a );
 
-    search_space_min.D = std::pow( 10.0, Dlmin );
-    search_space_max.D = std::pow( 10.0, Dlmax );
+    search_space_min.D = std::pow( T( constants::scale_exponent ), Dlmin );
+    search_space_max.D = std::pow( T( constants::scale_exponent ), Dlmax );
 
     std::tie( search_space_min.p, search_space_max.p )
       = contract_range( search_space_min.p, search_space_max.p, params_at_min.p, a );
@@ -1190,7 +1263,7 @@ parameters< T > fit(
   bool                use_geometric = false,
   callback_t< T >     callback      = []( parameters< T >, parameters< T >, parameters< T > ) {},
   progress_callback_t progress_callback                        = []( std::size_t, std::size_t ) {},
-  const bool&         stop_requested                           = false,
+  const std::atomic_bool& stop_requested                        = default_stop_requested,
   std::function< void( parameters< T > ) > per_thread_callback = []( parameters< T > ) {} )
 
 {
@@ -1206,8 +1279,14 @@ parameters< T > fit(
     }
   }
 
-  auto params_low  = parameters< T > { 1.0e-10, 1.7, 0.0001, 0.9 * Amin };
-  auto params_high = parameters< T > { 5.0e-10, 2.3, 1.05 * DeltaKmin, 450.0 };
+  auto params_low = parameters< T > { T( constants::default_D_min ),
+                                      T( constants::default_p_min ),
+                                      T( constants::default_DeltaK_thr_min ),
+                                      T( constants::default_A_min_factor ) * Amin };
+  auto params_high = parameters< T > { T( constants::default_D_max ),
+                                       T( constants::default_p_max ),
+                                       T( constants::default_DeltaK_thr_factor ) * DeltaKmin,
+                                       T( constants::default_A_max ) };
 
   // return fit( params_low, params_high, R, DeltaKs, dadNs, 12, 1.01, 0, callback ); // GOOD
 
@@ -1226,8 +1305,8 @@ parameters< T > fit(
   return fit( params_low,
               params_high,
               test_set,
-              12,
-              1.02,
+              constants::wrapper_subdivisions,
+              constants::default_amortization,
               0,
               use_geometric,
               callback,

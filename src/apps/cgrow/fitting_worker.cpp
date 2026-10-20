@@ -13,7 +13,7 @@ void fittingWorker::run( hs_parameters_t                   params_low,
                          bool                              compute_individually )
 {
   running_        = true;
-  stop_requested_ = false;
+  stop_requested_.store( false, std::memory_order_relaxed );
 
   if ( !compute_individually )
   {
@@ -132,7 +132,7 @@ void fittingWorker::run( hs_parameters_t                   params_low,
   }
 
   running_        = false;
-  stop_requested_ = false;
+  stop_requested_.store( false, std::memory_order_relaxed );
 
   emit progressReport( 99, 100 );
   emit finished();
@@ -141,7 +141,7 @@ void fittingWorker::run( hs_parameters_t                   params_low,
 void fittingWorker::stop( )
 {
   qDebug( ) << "Stopping";
-  stop_requested_ = true;
+  stop_requested_.store( true, std::memory_order_relaxed );
 }
 
 real_t Hartman_Schijve::calc_max_DeltaK_thr( const test_data_t& test )

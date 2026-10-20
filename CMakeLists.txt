@@ -2,6 +2,8 @@ cmake_minimum_required( VERSION 3.15 )
 
 project( cgrowfw VERSION 0.9.1 )
 
+enable_testing()
+
 unset( QT_QMAKE_EXECUTABLE )
 
 include( FetchContent )
@@ -44,3 +46,8 @@ set( CGROW_LICENSES_DIR "${CMAKE_CURRENT_LIST_DIR}/licenses" )
 set( CGROW_EXAMPLE_DATA_DIR "${CMAKE_CURRENT_LIST_DIR}/example_data")
 
 add_subdirectory( src )
+
+option( CGROW_BUILD_EXAMPLES "Build CGROW console examples" ON )
+if ( CGROW_BUILD_EXAMPLES )
+  add_subdirectory( examples )
+endif()

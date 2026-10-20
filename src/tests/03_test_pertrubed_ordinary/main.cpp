@@ -488,7 +488,7 @@ int main( )
     auto& g2 = f2.graph( 0 );
 
     std::size_t i = 0;
-    totalevals    = 0;
+    crack_growth::Hartman_Schijve::totalevals.store( 0 );
 
     double fmin1 = 100000000;
 
@@ -510,14 +510,14 @@ int main( )
           fmin1 = double( d.distance );
 
           spdlog::info( "{},{}", i, p.A );
-          g1.append_data( totalevals, p.A );
-          g3.append_data( totalevals, p.DeltaK_thr );
-          g4.append_data( totalevals, p.p );
-          g5.append_data( totalevals, p.D );
+          g1.append_data( crack_growth::Hartman_Schijve::totalevals.load(), p.A );
+          g3.append_data( crack_growth::Hartman_Schijve::totalevals.load(), p.DeltaK_thr );
+          g4.append_data( crack_growth::Hartman_Schijve::totalevals.load(), p.p );
+          g5.append_data( crack_growth::Hartman_Schijve::totalevals.load(), p.D );
         }
       },
       [ &i ]( std::size_t t, std::size_t ) { i = t; },
-      false,
+      std::atomic_bool {},
       [ &g1, &g2 ]( hs::parameters< real_t > p ) {
         //  g1.append_data( i++, p.DeltaK_thr, );
         //   g2.append_data( p.D*1e10, p.p );

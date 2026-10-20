@@ -61,6 +61,18 @@ namespace nelder_mead
 {
 namespace detail
 {
+
+namespace constants
+{
+inline constexpr std::size_t default_search_iterations = 10;
+inline constexpr std::size_t default_subdivisions      = 2;
+inline constexpr std::size_t default_corner_iterations = 50;
+inline constexpr double      test_step_scale           = 0.5;
+inline constexpr double      expanded_step_scale      = 1.5;
+inline constexpr std::size_t default_max_iterations    = 10000;
+inline constexpr double      default_threshold         = 1.0e-4;
+inline constexpr double      default_size_threshold    = 1.0e-4;
+}
 template <class T, std::size_t N>
 std::array<T,N> &operator+=( std::array<T,N> &ar1, const std::array<T,N> &ar2 )
 {
@@ -182,13 +194,13 @@ T simplex_size( const std::array<std::array< T, N>, M> simplex )
         }
     }
 
-    T volume = 1.0;
+    T volume = T( 1 );
     for ( std::size_t i = 0; i != mins.size(); i++ )
     {
         volume *= (maxs[i] - mins[i]);
     }
 
-    return std::pow( volume, (1.0 / N ) );
+    return std::pow( volume, ( T( 1 ) / T( N ) ) );
 }
 
 template <class T, class U>
@@ -207,9 +219,13 @@ struct options_t
 {
     options_t() = default;
 
-    std::size_t max_iterations  = 10000;
-    T threshold                 = 1e-4;
-    T size_threshold            = 1e-4; // Characteristic length. If simplex is enclosed in a 3D box this would be: volume^(1/3). In a rectangle: area^(1/2) and so on
+    std::size_t max_iterations  = detail::constants::default_max_iterations;
+    T threshold                 = T( detail::constants::default_threshold );
+    T size_threshold            = T( detail::constants::default_size_threshold ); // Characteristic length. If simplex is enclosed in a 3D box this would be: volume^(1/3). In a rectangle: area^(1/2) and so on
+    T reflection_coefficient    = T( 1 );
+    T expansion_coefficient     = T( 2 );
+    T contraction_coefficient   = T( 0.5 );
+    T shrink_coefficient        = T( 0.5 );
 };
 
 enum class step_kind_t
@@ -281,11 +297,6 @@ for ( st i = 0; i != func_val.size(); i++ )
 }
 
 // Regular Nelder-Mead parameters
-T alpha = 1.0;
-T beta  = 0.5;
-T gamma = 2.0;
-T sigma = 0.5;
-
 step_kind_t step_kind = step_kind_t::initial;
 
 st iteration = 0;
@@ -308,7 +319,8 @@ iteration++ )
         mean_vertex += vertices[i] / T{ vertices.size() - 1 };
     }
 
-    auto reflected_vertex = mean_vertex * ( 1.0 + alpha ) - vertices[ ultimate_vertex ] * alpha;
+    auto reflected_vertex = mean_vertex * ( T( 1 ) + options.reflection_coefficient )
+                           - vertices[ ultimate_vertex ] * options.reflection_coefficient;
     auto reflected_func_val = func( reflected_vertex );
 
 
@@ -323,7 +335,9 @@ iteration++ )
     {
         if ( reflected_func_val < func_val[ first_vertex ] )
         {
-            auto expanded_vertex = mean_vertex + (reflected_vertex - mean_vertex) * gamma;
+            auto expanded_vertex = mean_vertex
+                                 + ( reflected_vertex - mean_vertex )
+                                     * options.expansion_coefficient;
             auto expanded_func_val = func( expanded_vertex );
 
             if ( expanded_func_val < reflected_func_val )
@@ -341,9 +355,13 @@ iteration++ )
         }
         else
         {   // Modified the wikipedia variation to account for outside contraction.
-            auto contracted_vertex = ( reflected_func_val < func_val[ ultimate_vertex ]) ?
-                        mean_vertex * ( 1.0 + beta ) - vertices[ ultimate_vertex ] * beta:  //outside
-                        mean_vertex + ( vertices[ ultimate_vertex ] - mean_vertex ) * beta; //inside
+            auto contracted_vertex = ( reflected_func_val < func_val[ ultimate_vertex ] )
+                                       ? mean_vertex * ( T( 1 ) + options.contraction_coefficient )
+                                           - vertices[ ultimate_vertex ]
+                                                 * options.contraction_coefficient // outside
+                                       : mean_vertex
+                                           + ( vertices[ ultimate_vertex ] - mean_vertex )
+                                                 * options.contraction_coefficient; // inside
 
             auto contracted_func_val = func( contracted_vertex );
 
@@ -357,7 +375,8 @@ iteration++ )
             {   // shrink
                 for ( st i = 1 ; i != vertices.size( ); i++ )
                 {
-                    vertices[ i ] = vertices[ 0 ] + ( vertices[ i ] - vertices[ 0 ]) * sigma;
+                    vertices[ i ] = vertices[ 0 ]
+                                  + ( vertices[ i ] - vertices[ 0 ] ) * options.shrink_coefficient;
                     func_val[ i ] = func( vertices[ i ] );
                 }
                 step_kind = step_kind_t::shrink;
@@ -621,7 +640,7 @@ std::vector<T> search(
 
 
 
-    for ( auto k = 0; k != 10; k++)
+    for ( auto k = 0; k != detail::constants::default_search_iterations; k++)
     {
         for ( std::size_t j = 0 ; j != n ; j++)
         {
@@ -635,7 +654,7 @@ std::vector<T> search(
         std::vector<std::vector<double>> xs;
         //xs.push_back( x );
 
-        multi_index_t mi( std::vector<std::size_t>( n, 2) );
+        multi_index_t mi( std::vector<std::size_t>( n, detail::constants::default_subdivisions ) );
 
         std::vector<bounds<T>> new_bounds( n );
         std::vector<T> newx(n);
@@ -660,17 +679,17 @@ std::vector<T> search(
             }
 
 
-            for ( auto i = 0; i !=50; i++)
+            for ( auto i = 0; i != detail::constants::default_corner_iterations; i++)
             {
                 auto fcorner = f( xcorner ) ;
 
-                auto test = 0.5*(xcorner - x);
+                auto test = detail::constants::test_step_scale * (xcorner - x);
                 auto ftest = f( test );
                 std::cout << fcorner << ", " << ftest << std::endl;
 
                 if ( f( test ) > f( xcorner ) )
                 {
-                    test = 1.5*(xcorner - x );
+                    test = detail::constants::expanded_step_scale * (xcorner - x );
 
                 }
                 xcorner = test;
