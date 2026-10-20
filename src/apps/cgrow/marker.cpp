@@ -1,5 +1,6 @@
 #include "marker.hpp"
 
+#include <cmath>
 
 QString ScatterShapeToString( const QCPScatterStyle::ScatterShape &ss )
 {
@@ -83,7 +84,7 @@ qreal marker_t::line_width() const
     return scatter_style_.pen().widthF();
 }
 
-void marker_t::set_line_width(const qreal &w )
+void marker_t::set_line_width(qreal w )
 {
     auto pen = scatter_style_.pen();
     pen.setWidthF( w );
@@ -96,7 +97,7 @@ double marker_t::size( ) const
     return scatter_style_.size();
 }
 
-void marker_t::set_size( const int &s )
+void marker_t::set_size( qreal s )
 {
     scatter_style_.setSize( s );
 }
@@ -157,21 +158,17 @@ void marker_t::read(const QJsonObject &json_object)
 
     auto get_color_component =[ &color_object ](const QString &key)
     {
-        int c = 0;
         if (!( color_object.contains(key) && color_object[key].isDouble() ) )
         {
             throw std::runtime_error("Incorrect color component designation in json.");
         }
-        else
+        const double component = color_object[key].toDouble();
+        if ( !std::isfinite( component ) || component < 0.0 || component > 255.0
+             || std::floor( component ) != component )
         {
-            c = color_object[key].toDouble();
-            if ( c<0 || c > 255)
-            {
-                throw std::runtime_error("Incorrect color compenent value in json.");
-            }
+            throw std::runtime_error("Incorrect color component value in json.");
         }
-
-        return c;
+        return static_cast< int >( component );
     };
 
     auto r = get_color_component("red");
@@ -185,11 +182,12 @@ void marker_t::read(const QJsonObject &json_object)
         throw std::runtime_error("Incorrect line width in json.");
     }
 
-    if (json_object["line width"].toDouble() < 0.0 )
+    const double line_width = json_object["line width"].toDouble();
+    if ( !std::isfinite( line_width ) || line_width < 0.0 )
     {
         throw std::runtime_error("Incorrect line width designation in json.");
     }
-    set_line_width( json_object["line width"].toDouble() );
+    set_line_width( line_width );
 
 
     if (!(json_object.contains("size") && json_object["size"].isDouble() ))
@@ -197,5 +195,11 @@ void marker_t::read(const QJsonObject &json_object)
         throw std::runtime_error("Incorrect size designation in json.");
     }
 
-    set_size( json_object["size"].toDouble() );
+    constexpr qreal maximum_marker_size = 200.0;
+    const double size = json_object["size"].toDouble();
+    if ( !std::isfinite( size ) || size <= 0.0 || size > maximum_marker_size )
+    {
+        throw std::runtime_error("Incorrect size designation in json.");
+    }
+    set_size( static_cast< qreal >( size ) );
 }

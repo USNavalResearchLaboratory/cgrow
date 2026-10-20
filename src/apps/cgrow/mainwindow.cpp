@@ -478,17 +478,25 @@ mainWindow::mainWindow( QWidget* parent ) : QMainWindow( parent )
         return;
       }
 
-      for ( auto* g : computed_graphs )
-      {
-        plot->removeGraph( g );
-      }
-      computed_graphs.clear( );
-
       QByteArray data = read_file.readAll( );
+      QJsonParseError parse_error;
+      const QJsonDocument json_document = QJsonDocument::fromJson( data, &parse_error );
+      if ( parse_error.error != QJsonParseError::NoError || !json_document.isObject( ) )
+      {
+        QMessageBox::warning( this, tr( "Load data" ), tr( "The selected file is not valid JSON." ) );
+        return;
+      }
 
-      QJsonDocument json_document( QJsonDocument::fromJson( data ) );
-
-      tests_list->read( json_document.object( ) );
+      try
+      {
+        tests_list->read( json_document.object( ) );
+      }
+      catch ( const std::exception& error )
+      {
+        QMessageBox::warning( this, tr( "Load data" ), QString::fromUtf8( error.what( ) ) );
+        return;
+      }
+      clear_computed_results( );
 
       current_directory_ = fi.canonicalPath( );
 
@@ -1010,13 +1018,33 @@ void mainWindow::new_file( )
   tests_list->clear( );
 
   Rs.clear( );
-
-  for ( auto* g : computed_graphs )
-  {
-    plot->removeGraph( g );
-  }
+  clear_computed_results( );
 
   plot->replot( );
+}
+
+void mainWindow::clear_computed_results( )
+{
+  for ( auto* graph : computed_graphs )
+  {
+    if ( graph != nullptr )
+    {
+      plot->removeGraph( graph );
+    }
+  }
+  computed_graphs.clear( );
+
+  if ( lower_bounds_graph != nullptr )
+  {
+    plot->removeGraph( lower_bounds_graph );
+    lower_bounds_graph = nullptr;
+  }
+  if ( upper_bounds_graph != nullptr )
+  {
+    plot->removeGraph( upper_bounds_graph );
+    upper_bounds_graph = nullptr;
+  }
+  computed_.clear( );
 }
 
 std::vector< test_data_t > mainWindow::pull_tests_list( )
@@ -1039,24 +1067,7 @@ void mainWindow::fit( bool individually )
   Rs.clear( );
   auto tests_to_fit = pull_tests_list( );
 
-  for ( auto g : computed_graphs )
-  {
-    plot->removeGraph( g );
-  }
-
-  computed_graphs.clear( );
-
-  if ( lower_bounds_graph != nullptr )
-  {
-    plot->removeGraph( lower_bounds_graph );
-    lower_bounds_graph = nullptr;
-  }
-
-  if ( upper_bounds_graph != nullptr )
-  {
-    plot->removeGraph( upper_bounds_graph );
-    upper_bounds_graph = nullptr;
-  }
+  clear_computed_results( );
 
   auto iline = 0;
   if ( individually )
@@ -1452,22 +1463,28 @@ void mainWindow::handleProgressReport( int i, int total )
 
 void mainWindow::remove_test( int index )
 {
-  if ( tests_graph_map.size( ) > index )
+  if ( index < 0 || index >= tests_graph_map.size( ) )
   {
-    if ( tests_graph_map[ index ] != nullptr )
-    {
-      plot->removeGraph( tests_graph_map[ index ] );
-      tests_graph_map[ index ] = nullptr;
-      tests_graph_map.remove( index );
-    }
-    else
-    {
-      throw std::out_of_range( "not graph at index." );
-    }
+    throw std::out_of_range( "test index not found." );
+  }
+
+  if ( previously_selected_graph_index == index )
+  {
+    previously_selected_graph_index = -1;
+  }
+  else if ( previously_selected_graph_index > index )
+  {
+    --previously_selected_graph_index;
+  }
+
+  if ( tests_graph_map[ index ] != nullptr )
+  {
+    plot->removeGraph( tests_graph_map[ index ] );
+    tests_graph_map.remove( index );
   }
   else
   {
-    throw std::out_of_range( "test index not found." );
+    throw std::out_of_range( "not graph at index." );
   }
 
   auto_set( );
@@ -1706,12 +1723,13 @@ void mainWindow::update_test( int index )
 
 void mainWindow::handle_selected_test_changed( int index )
 {
-  if ( index >= tests_graph_map.size( ) )
+  if ( index < -1 || index >= tests_graph_map.size( ) )
   {
-    throw std::out_of_range( "Wrong graph index" );
+    return;
   }
 
-  if ( previously_selected_graph_index != -1 )
+  if ( previously_selected_graph_index >= 0
+       && previously_selected_graph_index < tests_graph_map.size( ) )
   {
     auto new_style = tests_graph_map[ previously_selected_graph_index ]->scatterStyle( );
 
@@ -1724,7 +1742,7 @@ void mainWindow::handle_selected_test_changed( int index )
     tests_graph_map[ previously_selected_graph_index ]->setScatterStyle( new_style );
   }
 
-  if ( index != -1 )
+  if ( index != -1 && tests_graph_map[ index ] != nullptr )
   {
 
     auto new_style = tests_graph_map[ index ]->scatterStyle( );
@@ -1738,6 +1756,10 @@ void mainWindow::handle_selected_test_changed( int index )
     tests_graph_map[ index ]->setScatterStyle( new_style );
 
     previously_selected_graph_index = index;
+  }
+  else
+  {
+    previously_selected_graph_index = -1;
   }
 
   auto_set( );

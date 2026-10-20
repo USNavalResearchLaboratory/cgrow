@@ -55,10 +55,10 @@ public:
   void                          set_shape( const QString& shape_name );
 
   qreal line_width( ) const;
-  void  set_line_width( const qreal& w );
+  void  set_line_width( qreal w );
 
   double size( ) const;
-  void   set_size( const int& s );
+  void   set_size( qreal s );
 
   QColor color( ) const;
   void   set_color( const QColor& c );

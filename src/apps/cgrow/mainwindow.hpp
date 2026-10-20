@@ -189,6 +189,8 @@ private:
 
   void insert_graph( int index );
 
+  void clear_computed_results( );
+
 
   QString current_directory_;
 

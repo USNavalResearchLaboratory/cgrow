@@ -57,6 +57,26 @@ int main()
     {
       return 15;
     }
+
+  {
+    crack_growth::test_data_t< T > repeated_delta_k;
+    repeated_delta_k.R = 0.5;
+    repeated_delta_k.points = { { 10.0, 1.0e-8 }, { 10.0, 2.0e-8 } };
+    bool rejected_degenerate_scale = false;
+    try
+    {
+      (void)crack_growth::computeAxesScale< T >(
+        std::vector< crack_growth::test_data_t< T > >{ repeated_delta_k } );
+    }
+    catch ( const std::invalid_argument& )
+    {
+      rejected_degenerate_scale = true;
+    }
+    if ( !rejected_degenerate_scale )
+    {
+      return 19;
+    }
+  }
   }
 
   // Collapsing one dimension must not collapse the dimensions that follow it.

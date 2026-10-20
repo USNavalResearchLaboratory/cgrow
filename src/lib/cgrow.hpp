@@ -407,10 +407,21 @@ T computeAxesScale( const Container_t& test_set )
     }
   }
 
-  return ( std::log10( dadNmax )
-           - std::log10( std::max( dadNmin, T( constants::minimum_positive_value ) ) ) )
-         / ( std::log10( DKmax )
-             - std::log10( std::max( DKmin, T( constants::minimum_positive_value ) ) ) );
+  const T delta_k_log_span = std::log10( DKmax )
+                             - std::log10( std::max( DKmin, T( constants::minimum_positive_value ) ) );
+  if ( !( delta_k_log_span > T( 0 ) ) )
+  {
+    throw std::invalid_argument( "DeltaK values must span a non-zero range." );
+  }
+
+  const T scale = ( std::log10( dadNmax )
+                    - std::log10( std::max( dadNmin, T( constants::minimum_positive_value ) ) ) )
+                  / delta_k_log_span;
+  if ( !std::isfinite( scale ) || scale <= T( 0 ) )
+  {
+    throw std::invalid_argument( "Test data must have a finite, positive logarithmic scale." );
+  }
+  return scale;
 }
 
 namespace CUHYSO

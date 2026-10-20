@@ -9,9 +9,35 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
-#include <QTimer>
+#include <QSignalBlocker>
 
-#include <QDebug>
+namespace
+{
+QVector< test_series_t > parse_test_series( const QJsonObject& json )
+{
+  if ( !( json.contains( "Crack Growth Tests" ) && json[ "Crack Growth Tests" ].isArray( ) ) )
+  {
+    throw std::runtime_error( "Json does not contain Crack Growth test." );
+  }
+
+  QVector< test_series_t > parsed;
+  const auto               series = json[ "Crack Growth Tests" ].toArray( );
+  parsed.reserve( series.size( ) );
+  for ( const auto& value : series )
+  {
+    if ( !value.isObject( ) )
+    {
+      throw std::runtime_error( "Json Crack Growth Test format is incorrect." );
+    }
+
+    test_series_t test;
+    test.read( value.toObject( ) );
+    parsed.push_back( std::move( test ) );
+  }
+
+  return parsed;
+}
+}
 
 tests_list_widget::tests_list_widget( QWidget* parent ) : QWidget( parent )
 {
@@ -43,21 +69,6 @@ tests_list_widget::tests_list_widget( QWidget* parent ) : QWidget( parent )
 
   this->setLayout( grid );
 
-  QTimer::singleShot( 2000, [ this ]( ) {
-    QFile read_file( QStringLiteral( "save.json" ) );
-
-    if ( !read_file.open( QIODevice::ReadOnly ) )
-    {
-      qWarning( "Couldn't open read file." );
-      return;
-    }
-
-    QByteArray saveData = read_file.readAll( );
-
-    QJsonDocument json_document( QJsonDocument::fromJson( saveData ) );
-
-    append( json_document.object( ) );
-  } );
 }
 
 const QVector< test_series_t >& tests_list_widget::tests( ) const
@@ -80,6 +91,7 @@ void tests_list_widget::write( QJsonObject& json )
 
 void tests_list_widget::clear( )
 {
+  const QSignalBlocker signal_blocker( list );
   while ( tests_.size( ) != 0 )
   {
     auto id = tests_.size( ) - 1;
@@ -87,48 +99,35 @@ void tests_list_widget::clear( )
     tests_.remove( id );
 
     delete list->takeItem( id );
-
-    current_test_number = 0;
-
     emit test_series_removed( id );
   }
+  current_test_number = 0;
+  emit current_row_changed( list->currentRow( ) );
 }
 
 void tests_list_widget::read( const QJsonObject& json )
 {
+  const auto parsed = parse_test_series( json );
   clear( );
 
-  append( json );
+  for ( const auto& test : parsed )
+  {
+    tests_.push_back( test );
+    ++current_test_number;
+    new QListWidgetItem( test.generate_scatter_icon( ), test.name( ), list );
+    emit test_series_updated( tests_.size( ) - 1 );
+  }
 }
 
 void tests_list_widget::append( const QJsonObject& json )
 {
-  if ( !( json.contains( "Crack Growth Tests" ) && json[ "Crack Growth Tests" ].isArray( ) ) )
+  const auto parsed = parse_test_series( json );
+  for ( const auto& test : parsed )
   {
-    throw std::runtime_error( "Json does not contain Crack Growth test." );
-  }
-  else
-  {
-    auto series = json[ "Crack Growth Tests" ].toArray( );
-    for ( const auto& v : series )
-    {
-
-      if ( !v.isObject( ) )
-      {
-        throw std::runtime_error( "Json Crack Growth Test format is incorrect." );
-      }
-
-      test_series_t test;
-      test.read( v.toObject( ) );
-
-      tests_.push_back( test );
-
-      current_test_number++;
-
-      new QListWidgetItem( test.generate_scatter_icon( ), test.name( ), list );
-
-      emit test_series_updated( tests_.size( ) - 1 );
-    }
+    tests_.push_back( test );
+    ++current_test_number;
+    new QListWidgetItem( test.generate_scatter_icon( ), test.name( ), list );
+    emit test_series_updated( tests_.size( ) - 1 );
   }
 }
 
@@ -184,26 +183,27 @@ void tests_list_widget::remove_test_series_item( )
 
   std::sort( ids.begin( ), ids.end( ) );
 
-  auto name = list->item( data_index )->text( );
-
-  int ret = QMessageBox::warning(
+  const auto result = QMessageBox::warning(
     this,
     tr( "HS" ),
     tr( "Are you sure you want to remove %1? items" ).arg( list->selectedItems( ).size( ) ),
     QMessageBox::Yes | QMessageBox::Cancel );
 
-  if ( ret == QDialog::Rejected )
+  if ( result != QMessageBox::Yes )
   {
     return;
   }
 
-  for ( auto iter = ids.rbegin( ); iter != ids.rend( ); iter++ )
   {
-    tests_.remove( *iter );
-    delete list->takeItem( *iter );
-    emit test_series_removed( *iter );
+    const QSignalBlocker signal_blocker( list );
+    for ( auto iter = ids.rbegin( ); iter != ids.rend( ); iter++ )
+    {
+      tests_.remove( *iter );
+      delete list->takeItem( *iter );
+      emit test_series_removed( *iter );
+    }
   }
-  // tests_.remove( data_index );
+  emit current_row_changed( list->currentRow( ) );
 }
 
 void tests_list_widget::edit_test_series_item( )

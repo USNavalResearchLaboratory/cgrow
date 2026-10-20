@@ -305,10 +305,28 @@ void spreadsheet::paste()
     QString str = QApplication::clipboard()->text();
 
     QStringList rows = str.split('\n');
+    if ( !rows.isEmpty( ) && rows.back( ).isEmpty( ) )
+    {
+        rows.removeLast( );
+    }
+    if ( rows.isEmpty( ) )
+    {
+        return;
+    }
 
     int numRows = rows.count();
 
     int numColumns = rows.first().count('\t') + 1;
+
+    for ( const auto& row : rows )
+    {
+        if ( row.count('\t') + 1 != numColumns )
+        {
+            QMessageBox::information(this, tr("Spreadsheet"),
+                                     tr("The information cannot be pasted because rows have different numbers of columns."));
+            return;
+        }
+    }
 
 
     if (range.rowCount() * range.columnCount() != 1
